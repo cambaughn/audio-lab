@@ -27,6 +27,19 @@ Decision: pinned `av==15.1.0` (the last macosx_13 wheel) alongside torch
 2.11.0, and documented the cliff pattern in requirements.txt so future
 upgrades check wheels before bumping any native package.
 
+## Observation 002
+The very first microphone stream a process opens can fail with an opaque
+PortAudio internal error (−9986) and then work forever after — the same
+first-attempt-after-permission-grant flakiness Identity Lab saw with the
+camera. Meanwhile `check_input_settings()` said 16 kHz was supported even
+while the start was failing, so capability *checks* are not predictive;
+only actually starting the stream is.
+
+Decision: capture opens with one automatic retry before surfacing
+`MIC ERROR`, and we trust empirical stream starts over capability queries.
+16 kHz direct capture is confirmed working (141 ms open), so no software
+resampler is built.
+
 ---
 
 # Future Work — declined rabbit-holes

@@ -39,3 +39,14 @@ Dated, running record of the machine, toolchain, and every measured number
   numpy 2.4.6, sounddevice 0.5.5 (PortAudio bundled), Qt 6.11.1,
   faster-whisper 1.2.1 (ctranslate2 4.8.1), speechbrain 1.1.0.
   Cold import of the full stack: ~42 s wall (cold disk cache; 4.8 s CPU).
+- `scripts/smoke_test.py` on the built-in mic: **16 kHz mono stream opens
+  in 141 ms** and captures live signal (quiet-room floor ≈ −54 dBFS) —
+  CoreAudio resampling below PortAudio works as planned; no software
+  resampler needed.
+- **First-start transient**: the very first mic stream this process ever
+  opened failed with PortAudio −9986 (AUHAL error during init) and then
+  never failed again — the same "first attempt after a fresh permission
+  grant fails" behavior Identity Lab documented for the camera. Mitigation
+  (CP3): one automatic retry on stream-start failure before declaring
+  `MIC ERROR`. Note `check_input_settings()` passed while the actual
+  start failed — the check is not a reliable predictor.
