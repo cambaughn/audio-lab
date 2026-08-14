@@ -40,6 +40,17 @@ Decision: capture opens with one automatic retry before surfacing
 16 kHz direct capture is confirmed working (141 ms open), so no software
 resampler is built.
 
+## Observation 003
+The planned dedicated capture QThread turned out to be unnecessary:
+PortAudio's callback already runs on its own native thread, so all the
+worker thread would have done is forward data. Identity Lab needed a
+camera thread because OpenCV capture is a blocking *pull* loop; audio
+capture is *push*.
+
+Decision: AudioRecorder lives on the main thread — the callback mutates
+lock-protected state, a 15 Hz QTimer publishes signals. One less thread,
+one less lifecycle to test, identical learning value.
+
 ---
 
 # Future Work — declined rabbit-holes
