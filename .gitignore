@@ -1,0 +1,52 @@
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Python build/cache artifacts
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Local databases and biometric/conversation data — never commit
+*.db
+*.sqlite
+*.sqlite3
+
+# Raw audio — never stored by design, never committed as belt-and-braces
+*.wav
+*.aiff
+*.mp3
+*.flac
+recordings/
+
+# Model weights and caches — downloaded, never committed
+models/
+pretrained_models/
+*.ckpt
+*.onnx
+*.bin
+
+# LLM configuration (contains provider/model choices; key stays in env)
+llm.json
+
+# Logs
+*.log
+logs/
+
+# Local settings
+settings.json
+.env
+*.local
+
+# macOS
+.DS_Store
+
+# Editors
+.vscode/
+.idea/

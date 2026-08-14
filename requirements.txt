@@ -1,0 +1,22 @@
+# Pinned for macOS 13.7 (Ventura) / Apple M2 / Python 3.11 (Homebrew arm64).
+# Create the venv with the EXPLICIT interpreter path (bare `python3` on this
+# machine is a python.org universal2 build and can pull x86_64 wheels):
+#   /opt/homebrew/opt/python@3.11/bin/python3.11 -m venv .venv
+#   .venv/bin/pip install -r requirements.txt
+#
+# torch is HARD-PINNED at 2.11.0: it is the last release with macOS-13
+# (macosx_11_0_arm64) wheels. torch >= 2.12 ships macosx_14_0 wheels only —
+# a naive `pip install torch` on this machine fails with a confusing
+# "no matching distribution" error. Upgrade torch only after upgrading macOS.
+torch==2.11.0
+torchaudio==2.11.0
+speechbrain==1.1.0
+faster-whisper==1.2.1
+# av (faster-whisper dependency) hits the same macOS-14 wheel cliff as torch:
+# av >= 16 ships macosx_14_0 wheels only, and the sdist fails to compile
+# against this machine's ffmpeg headers. 15.1.0 is the last macOS-13 wheel.
+av==15.1.0
+numpy==2.4.6
+sounddevice==0.5.5
+PySide6==6.11.1
+pytest==9.1.1
