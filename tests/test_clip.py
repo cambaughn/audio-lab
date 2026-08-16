@@ -73,3 +73,23 @@ class TestGates:
         quiet_short = tone(0.2, amplitude=1e-4)
         verdict, _ = gate_clip(make_clip(quiet_short))
         assert verdict is ClipVerdict.TOO_SHORT
+
+
+class TestPlaybackNormalization:
+    def test_quiet_clip_is_boosted_for_review(self):
+        from audio_lab.audio.playback import REVIEW_PEAK, normalize_for_review, play_clip
+
+        quiet = make_clip(tone(1.0, amplitude=0.03))  # typical laptop-mic peak
+        out = normalize_for_review(quiet.samples)
+        assert abs(float(np.max(np.abs(out))) - REVIEW_PEAK) < 1e-3
+        assert quiet.samples.max() < 0.04  # original untouched
+        played = []
+        play_clip(quiet, player=lambda s, sr: played.append((s, sr)))
+        assert played[0][1] == SAMPLE_RATE
+        assert float(np.max(np.abs(played[0][0]))) > 0.6
+
+    def test_silence_is_not_amplified(self):
+        from audio_lab.audio.playback import normalize_for_review
+
+        out = normalize_for_review(np.zeros(1000, dtype=np.float32))
+        assert float(np.max(np.abs(out))) == 0.0

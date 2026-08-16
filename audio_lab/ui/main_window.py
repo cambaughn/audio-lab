@@ -8,8 +8,9 @@ permission; declined for v0.1).
 """
 
 import subprocess
+import time
 
-from PySide6.QtCore import QByteArray, Qt
+from PySide6.QtCore import QByteArray, Qt, QTimer
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
@@ -47,6 +48,11 @@ class MainWindow(QMainWindow):
 
         self.recorder = recorder or AudioRecorder()
         self.recorder.setParent(self)
+
+        self._recording_started: float | None = None
+        self._duration_timer = QTimer(self)
+        self._duration_timer.setInterval(100)
+        self._duration_timer.timeout.connect(self._tick_recording_duration)
 
         self._build_layout()
         self._wire_recorder()
@@ -149,7 +155,16 @@ class MainWindow(QMainWindow):
 
     def _on_recorder_state(self, state: str) -> None:
         is_error = state == RecorderState.ERROR.value
-        self.panel.show_state(state, is_error=is_error)
+        recording = state == RecorderState.RECORDING.value
+        self._set_ptt_recording_look(recording)
+        if recording:
+            self._recording_started = time.monotonic()
+            self._duration_timer.start()
+            self.panel.show_state("● RECORDING  0.0s")
+        else:
+            self._duration_timer.stop()
+            self._recording_started = None
+            self.panel.show_state(state, is_error=is_error)
         self.waveform.set_state_text(state)
         armed = state in (
             RecorderState.ARMED.value,
@@ -176,6 +191,17 @@ class MainWindow(QMainWindow):
         if self._last_clip is not None:
             self.log_event("PLAYBACK: LAST CLIP")
             playback.play_clip(self._last_clip)
+
+    def _set_ptt_recording_look(self, recording: bool) -> None:
+        self.ptt_button.setText("● RECORDING — RELEASE TO SEND" if recording else "HOLD TO TALK (SPACE)")
+        self.ptt_button.setObjectName("recording" if recording else "")
+        self.ptt_button.style().unpolish(self.ptt_button)
+        self.ptt_button.style().polish(self.ptt_button)
+
+    def _tick_recording_duration(self) -> None:
+        if self._recording_started is not None:
+            elapsed = time.monotonic() - self._recording_started
+            self.panel.show_state(f"● RECORDING  {elapsed:.1f}s")
 
     # -- push-to-talk (button + spacebar) --
 

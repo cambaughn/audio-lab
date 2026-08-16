@@ -75,6 +75,12 @@ def stylesheet() -> str:
         border-color: {AMBER_FAINT};
         color: {AMBER_FAINT};
     }}
+    QPushButton#recording, QPushButton#recording:pressed, QPushButton#recording:hover {{
+        background-color: {AMBER};
+        color: {BG};
+        border-color: {AMBER};
+        font-weight: bold;
+    }}
     QPushButton#danger {{
         border-color: {ERROR};
         color: {ERROR};

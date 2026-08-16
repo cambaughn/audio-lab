@@ -65,6 +65,20 @@ signal gets measured against the actual device before it ships, and the
 measurement goes in environment.md — synthetic tests prove logic, not
 calibration.
 
+## Observation 005
+Two things the first user noticed that no test could: (a) armed vs.
+recording was not visually distinct — the waveform brightening was too
+subtle a cue for a state that matters this much; (b) PLAY LAST CLIP
+"didn't play" although the output stream was verifiably active — the clip
+peaked at ~3% of full scale and was simply inaudible through laptop
+speakers. Push-to-talk clips from a laptop mic are quiet by nature.
+
+Decision: recording state is now unmistakable (the PTT button inverts to
+solid amber with a live duration counter); playback is peak-normalized to
+a review level while stored/analyzed samples stay untouched. Interaction
+feel is part of the research question, and it can only be judged by a
+human at the gate — which is exactly why the gates exist.
+
 ---
 
 # Future Work — declined rabbit-holes
