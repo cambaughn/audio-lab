@@ -20,7 +20,10 @@ SAMPLE_RATE = 16_000
 
 MIN_UTTERANCE_S = 0.6
 MAX_UTTERANCE_S = 30.0
-MIN_RMS_DBFS = -45.0
+# Measured on the M2 MacBook Air built-in mic (learnings.md Observation 004):
+# quiet-room floor ~ -63 dBFS, normal speech at arm's length ~ -45..-30 dBFS.
+# The gate must reject the floor without rejecting quiet speakers.
+MIN_RMS_DBFS = -55.0
 MAX_CLIPPED_FRACTION = 0.01
 _CLIP_THRESHOLD = 0.99  # |sample| at or above this counts as clipped
 

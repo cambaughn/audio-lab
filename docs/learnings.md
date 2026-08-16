@@ -51,6 +51,20 @@ Decision: AudioRecorder lives on the main thread — the callback mutates
 lock-protected state, a 15 Hz QTimer publishes signals. One less thread,
 one less lifecycle to test, identical learning value.
 
+## Observation 004
+The first real user test failed on a *guessed* constant: the "too quiet"
+gate was set at −45 dBFS from intuition, but the built-in M2 mic delivers
+normal speech at roughly −45 to −30 dBFS and a quiet room at −63 to −71
+dBFS — so every genuine utterance was rejected and PLAY LAST CLIP never
+lit up. All 31 unit tests passed because they tested the gate against
+synthetic tones, not against what a real microphone produces.
+
+Decision: gate lowered to −55 dBFS (still rejects the measured room floor
+by a wide margin). More importantly: any threshold that touches real
+signal gets measured against the actual device before it ships, and the
+measurement goes in environment.md — synthetic tests prove logic, not
+calibration.
+
 ---
 
 # Future Work — declined rabbit-holes

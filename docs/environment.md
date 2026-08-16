@@ -50,3 +50,11 @@ Dated, running record of the machine, toolchain, and every measured number
   (CP3): one automatic retry on stream-start failure before declaring
   `MIC ERROR`. Note `check_input_settings()` passed while the actual
   start failed — the check is not a reliable predictor.
+
+## CP4 gate — real-input level calibration (2026-08-10)
+
+Live recorder measurements on the built-in mic during the first user test:
+quiet-room floor **−63 to −71 dBFS RMS**; a person speaking near the
+laptop **≈ −45 dBFS RMS, peak ≈ 0.09**. The original −45 dBFS quiet gate
+rejected real speech; lowered to **−55 dBFS** (learnings.md Observation
+004). Silence remains rejected at the new gate.
