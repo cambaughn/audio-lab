@@ -25,6 +25,7 @@ from audio_lab.audio import playback
 from audio_lab.audio.capture import AudioRecorder, RecorderState
 from audio_lab.audio.clip import AudioClip
 from audio_lab.audio.devices import list_input_devices
+from audio_lab.audio.system_input import LOW_INPUT_VOLUME, read_input_volume
 from audio_lab.config import settings as config
 from audio_lab.diagnostics.metrics import StatusLog
 from audio_lab.ui import theme
@@ -145,7 +146,15 @@ class MainWindow(QMainWindow):
         device = self.panel.selected_device()
         name = device.name if device else None
         self.log_event(f"MIC ARM: {(name or 'DEFAULT').upper()}")
+        self._check_input_volume()
         self.recorder.arm(name)
+
+    def _check_input_volume(self) -> None:
+        volume = read_input_volume()
+        low = volume is not None and volume < LOW_INPUT_VOLUME
+        self.panel.show_input_volume(volume, low)
+        if volume is not None:
+            self.log_event(f"OS INPUT VOLUME: {volume}%" + (" — LOW, CAPTURE WILL BE QUIET" if low else ""))
 
     def _disarm(self) -> None:
         self.recorder.disarm()

@@ -87,6 +87,10 @@ class ControlPanel(QWidget):
         self.level_label.setObjectName("secondary")
         mic.addWidget(self.level_label)
 
+        self.input_volume_label = QLabel("OS INPUT VOL  --")
+        self.input_volume_label.setObjectName("secondary")
+        mic.addWidget(self.input_volume_label)
+
         self.last_clip_label = QLabel("LAST CLIP  --")
         self.last_clip_label.setObjectName("secondary")
         mic.addWidget(self.last_clip_label)
@@ -149,6 +153,15 @@ class ControlPanel(QWidget):
             self.level_label.setText("LEVEL   ---.- dBFS")
         else:
             self.level_label.setText(f"LEVEL   {rms_dbfs:6.1f} dBFS")
+
+    def show_input_volume(self, volume: int | None, low: bool) -> None:
+        text = "OS INPUT VOL  --" if volume is None else f"OS INPUT VOL  {volume:3d}%"
+        if low:
+            text += "  ▲ LOW — RAISE IN SYSTEM SETTINGS → SOUND → INPUT"
+        self.input_volume_label.setText(text)
+        self.input_volume_label.setObjectName("error" if low else "secondary")
+        self.input_volume_label.style().unpolish(self.input_volume_label)
+        self.input_volume_label.style().polish(self.input_volume_label)
 
     def show_last_clip(self, summary: str, playable: bool) -> None:
         self.last_clip_label.setText(f"LAST CLIP  {summary}")

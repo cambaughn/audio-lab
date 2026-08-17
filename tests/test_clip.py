@@ -75,29 +75,30 @@ class TestGates:
         assert verdict is ClipVerdict.TOO_SHORT
 
 
-class TestPlaybackNormalization:
-    def test_quiet_clip_is_boosted_for_review(self):
-        from audio_lab.audio.playback import REVIEW_PEAK, normalize_for_review, play_clip
+class TestPlayback:
+    def test_play_clip_passes_samples_unmodified(self):
+        from audio_lab.audio.playback import play_clip
 
-        moderate = make_clip(tone(1.0, amplitude=0.3))
-        out = normalize_for_review(moderate.samples)
-        assert abs(float(np.max(np.abs(out))) - REVIEW_PEAK) < 1e-3
-        assert moderate.samples.max() < 0.31  # original untouched
+        clip = make_clip(tone(1.0, amplitude=0.03))
         played = []
-        play_clip(moderate, player=lambda s, sr: played.append((s, sr)))
+        play_clip(clip, player=lambda s, sr: played.append((s, sr)))
         assert played[0][1] == SAMPLE_RATE
-        assert float(np.max(np.abs(played[0][0]))) > 0.6
+        assert np.array_equal(played[0][0], clip.samples)  # no gain, no processing
 
-    def test_gain_is_capped_for_very_quiet_clips(self):
-        from audio_lab.audio.playback import MAX_REVIEW_GAIN_DB, normalize_for_review
 
-        quiet = make_clip(tone(1.0, amplitude=0.03))  # typical laptop-mic peak
-        out = normalize_for_review(quiet.samples)
-        applied_db = 20 * np.log10(float(np.max(np.abs(out))) / quiet.peak)
-        assert abs(applied_db - MAX_REVIEW_GAIN_DB) < 0.1  # capped, not 0.7 peak
+class TestSystemInputVolume:
+    def test_reads_osascript_output(self):
+        from audio_lab.audio.system_input import read_input_volume
 
-    def test_silence_is_not_amplified(self):
-        from audio_lab.audio.playback import normalize_for_review
+        class R:
+            stdout = "14\n"
 
-        out = normalize_for_review(np.zeros(1000, dtype=np.float32))
-        assert float(np.max(np.abs(out))) == 0.0
+        assert read_input_volume(runner=lambda *a, **k: R()) == 14
+
+    def test_unavailable_gives_none(self):
+        from audio_lab.audio.system_input import read_input_volume
+
+        def boom(*a, **k):
+            raise OSError("no osascript")
+
+        assert read_input_volume(runner=boom) is None

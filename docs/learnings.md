@@ -92,7 +92,26 @@ sensitive instrument and the mic floor is not silent.
 Decision: review gain capped at +12 dB. Also a note for Batch 2: the
 embedding model will see that same hum on every clip; whether ECAPA is
 robust to it is now a concrete thing to watch in the calibration data,
-not a hypothetical.
+not a hypothetical. **Superseded by Observation 007 — the root cause was
+upstream.**
+
+## Observation 007
+The user asked the right question: "every other program records clean
+audio here — what is different?" The answer was the **macOS system input
+volume, set to 14%**. The OS attenuates the microphone before any app
+sees it; conferencing apps mask that with automatic gain control, a raw
+PortAudio stream does not. Everything in Observations 004–006 was
+downstream of one hidden system setting: speech arriving at −45 dBFS
+(gate rejections), inaudible playback, and then hum when I compensated by
+boosting. Two rounds of "fixes" treated symptoms because I inferred
+instead of measuring the whole chain — including the OS layer.
+
+Decision: no playback processing at all — clips play back exactly as
+captured. The app now *shows* the OS input volume in the MICROPHONE panel
+and warns when it is low, so a quiet signal is diagnosable at a glance.
+General lesson, worth carrying to Batch 2 calibration: when a signal
+looks wrong, measure every stage from the OS inward before touching
+code; and a user's "this works everywhere else" is data, not noise.
 
 ---
 
