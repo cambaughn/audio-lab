@@ -79,6 +79,21 @@ a review level while stored/analyzed samples stay untouched. Interaction
 feel is part of the research question, and it can only be judged by a
 human at the gate — which is exactly why the gates exist.
 
+## Observation 006
+The playback fix from Observation 005 introduced a "crunching/beeping"
+sound under the recording. Capture was verified clean (a 440 Hz test tone
+recorded through the full AudioRecorder path came back spectrally pure
+with zero overflows and no dropouts); the artifact was full peak-
+normalization applying ~+27 dB, which lifted the built-in mic's own noise
+floor — discrete hum at ~120 Hz and ~217 Hz sitting at −60 dBFS — up to
+−33 dBFS, clearly audible. The signal chain is fine; the *ear* is a
+sensitive instrument and the mic floor is not silent.
+
+Decision: review gain capped at +12 dB. Also a note for Batch 2: the
+embedding model will see that same hum on every clip; whether ECAPA is
+robust to it is now a concrete thing to watch in the calibration data,
+not a hypothetical.
+
 ---
 
 # Future Work — declined rabbit-holes
