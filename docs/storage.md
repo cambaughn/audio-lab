@@ -8,14 +8,17 @@ the Identity Lab store discipline: versioned `_MIGRATIONS` dict applied
 inside a `schema_migrations` bookkeeping table, typed error hierarchy,
 `PRAGMA secure_delete=ON`, `PRAGMA quick_check` on open, reset + VACUUM.
 
-## speakers.db (biometrics — planned, CP5)
+## speakers.db (biometrics — schema v1, CP5)
 
 A separate file so "delete all voice data" is one self-contained,
-VACUUM-scrubbed operation.
+VACUUM-scrubbed operation. Table names are modality-neutral where the
+content is (identities), audio-specific where it is (voice_samples).
 
-- `speakers(id, display_name UNIQUE(lower), created_at, enrollment_version)`
-- `voice_samples(id, speaker_id FK CASCADE, embedding BLOB, dim, dtype,
+- `identities(id, display_name UNIQUE(lower), created_at,
+  enrollment_version)`
+- `voice_samples(id, identity_id FK CASCADE, embedding BLOB, dim, dtype,
   model_id, duration_s, created_at)`
+- `schema_migrations(version, applied_at)`
 
 Embedding codec: little-endian `<f4`, no header, blob length exactly
 `dim * 4`, dim and model_id in their own columns, validation on encode and
