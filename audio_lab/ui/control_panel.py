@@ -6,14 +6,16 @@ setters and listens to the signals. Later batches add SPEAKER,
 AUTHORIZATION, TRANSCRIPT, LLM, TTS, and THRESHOLDS groups here.
 """
 
-from PySide6.QtCore import QPoint, Signal
+from PySide6.QtCore import QPoint, Qt, Signal
 from PySide6.QtWidgets import (
     QComboBox,
     QGroupBox,
+    QHBoxLayout,
     QLabel,
     QListView,
     QPlainTextEdit,
     QPushButton,
+    QSlider,
     QVBoxLayout,
     QWidget,
 )
@@ -56,8 +58,19 @@ class ControlPanel(QWidget):
     stop_requested = Signal()
     device_selected = Signal(object)  # InputDevice
     play_last_requested = Signal()
+    enroll_requested = Signal()
+    manage_requested = Signal()
+    recognition_threshold_changed = Signal(float)
+    private_threshold_changed = Signal(float)
+    margin_changed = Signal(float)
 
-    def __init__(self, parent=None) -> None:
+    def __init__(
+        self,
+        recognition_threshold: float = 0.40,
+        private_access_threshold: float = 0.55,
+        match_margin: float = 0.10,
+        parent=None,
+    ) -> None:
         super().__init__(parent)
         self.setFixedWidth(PANEL_WIDTH)
         self._devices: list[InputDevice] = []
@@ -102,6 +115,67 @@ class ControlPanel(QWidget):
 
         root.addWidget(mic_box)
 
+        # -- SPEAKER --
+        speaker_box = QGroupBox("SPEAKER")
+        speaker = QVBoxLayout(speaker_box)
+        speaker.setSpacing(theme.SPACING - 4)
+        self.model_label = QLabel("MODEL LOADING")
+        speaker.addWidget(self.model_label)
+        self.speaker_label = QLabel("SPEAKER  --")
+        speaker.addWidget(self.speaker_label)
+        self.similarity_label = QLabel("SIM  --    2ND  --")
+        self.similarity_label.setObjectName("secondary")
+        speaker.addWidget(self.similarity_label)
+        root.addWidget(speaker_box)
+
+        # -- AUTHORIZATION --
+        auth_box = QGroupBox("AUTHORIZATION")
+        auth = QVBoxLayout(auth_box)
+        auth.setSpacing(theme.SPACING - 4)
+        self.decision_label = QLabel("DECISION  --")
+        auth.addWidget(self.decision_label)
+        self.reason_label = QLabel("")
+        self.reason_label.setObjectName("secondary")
+        self.reason_label.setWordWrap(True)
+        auth.addWidget(self.reason_label)
+        root.addWidget(auth_box)
+
+        # -- THRESHOLDS --
+        thr_box = QGroupBox("THRESHOLDS")
+        thr = QVBoxLayout(thr_box)
+        thr.setSpacing(theme.SPACING - 4)
+        self.recognition_slider, self.recognition_value = self._slider_row(
+            thr, "RECOG", recognition_threshold, 5, 95
+        )
+        self.recognition_slider.valueChanged.connect(
+            lambda v: self._on_slider(self.recognition_value, v, self.recognition_threshold_changed)
+        )
+        self.private_slider, self.private_value = self._slider_row(
+            thr, "PRIVATE", private_access_threshold, 5, 95
+        )
+        self.private_slider.valueChanged.connect(
+            lambda v: self._on_slider(self.private_value, v, self.private_threshold_changed)
+        )
+        self.margin_slider, self.margin_value = self._slider_row(
+            thr, "MARGIN", match_margin, 0, 50
+        )
+        self.margin_slider.valueChanged.connect(
+            lambda v: self._on_slider(self.margin_value, v, self.margin_changed)
+        )
+        root.addWidget(thr_box)
+
+        # -- IDENTITY --
+        id_box = QGroupBox("IDENTITY")
+        id_layout = QVBoxLayout(id_box)
+        self.enroll_button = QPushButton("ENROLL VOICE")
+        self.enroll_button.setEnabled(False)
+        self.enroll_button.clicked.connect(self.enroll_requested)
+        id_layout.addWidget(self.enroll_button)
+        self.manage_button = QPushButton("MANAGE SPEAKERS")
+        self.manage_button.clicked.connect(self.manage_requested)
+        id_layout.addWidget(self.manage_button)
+        root.addWidget(id_box)
+
         # -- EVENT LOG --
         log_box = QGroupBox("EVENT LOG")
         log_layout = QVBoxLayout(log_box)
@@ -114,7 +188,48 @@ class ControlPanel(QWidget):
 
         root.addStretch(1)
 
+    # -- slider plumbing (int sliders holding value*100) --
+
+    def _slider_row(self, layout, label: str, value: float, lo: int, hi: int):
+        row = QHBoxLayout()
+        row.addWidget(QLabel(label))
+        slider = QSlider(Qt.Horizontal)
+        slider.setRange(lo, hi)
+        slider.setValue(round(value * 100))
+        row.addWidget(slider, stretch=1)
+        value_label = QLabel(f"{value:.2f}")
+        value_label.setFixedWidth(34)
+        row.addWidget(value_label)
+        layout.addLayout(row)
+        return slider, value_label
+
+    @staticmethod
+    def _on_slider(value_label: QLabel, raw: int, signal) -> None:
+        value = raw / 100.0
+        value_label.setText(f"{value:.2f}")
+        signal.emit(value)
+
     # -- window-called setters --
+
+    def show_model_state(self, text: str, is_error: bool = False) -> None:
+        self.model_label.setText(text)
+        self.model_label.setObjectName("error" if is_error else "")
+        self.model_label.style().unpolish(self.model_label)
+        self.model_label.style().polish(self.model_label)
+
+    def show_speaker(self, speaker_text: str, similarity_text: str) -> None:
+        self.speaker_label.setText(speaker_text)
+        self.similarity_label.setText(similarity_text)
+
+    def show_decision(self, decision_text: str, reason_text: str, dimmed: bool) -> None:
+        self.decision_label.setText(decision_text)
+        self.decision_label.setObjectName("secondary" if dimmed else "")
+        self.decision_label.style().unpolish(self.decision_label)
+        self.decision_label.style().polish(self.decision_label)
+        self.reason_label.setText(reason_text)
+
+    def set_enroll_enabled(self, enabled: bool) -> None:
+        self.enroll_button.setEnabled(enabled)
 
     def set_devices(self, devices: list[InputDevice], selected_name: str | None) -> None:
         self._devices = devices

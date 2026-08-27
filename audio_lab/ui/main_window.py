@@ -1,17 +1,25 @@
-"""Main window — Batch 1: armed microphone, push-to-talk, waveform, log.
+"""Main window — push-to-talk capture + speaker attribution.
 
 Owns the AudioRecorder (main-thread object; see audio/capture.py for the
-threading model), the StatusLog, and settings persistence. Push-to-talk is
-the big HOLD TO TALK button or holding Space while the window has focus —
-deliberately in-app only (a global hotkey would need the Accessibility
-permission; declined for v0.1).
+threading model), the SpeechWorker thread (models), the IdentityStore,
+the matcher gallery, the StatusLog, and settings persistence.
+Push-to-talk is the big HOLD TO TALK button or holding Space while the
+window has focus — deliberately in-app only (a global hotkey would need
+the Accessibility permission; declined for v0.1).
+
+Per accepted clip: SpeechWorker embeds it → matcher scores it against the
+gallery → decide() maps it to an access tier → SPEAKER / AUTHORIZATION
+readouts update. While the enrollment dialog is open it owns all clips
+and analyses; the window ignores them.
 """
 
 import subprocess
 import time
 
-from PySide6.QtCore import QByteArray, Qt, QTimer
+import numpy as np
+from PySide6.QtCore import QByteArray, Qt, QThread, QTimer
 from PySide6.QtWidgets import (
+    QDialog,
     QHBoxLayout,
     QLabel,
     QMainWindow,
@@ -28,8 +36,16 @@ from audio_lab.audio.devices import list_input_devices
 from audio_lab.audio.system_input import LOW_INPUT_VOLUME, read_input_volume
 from audio_lab.config import settings as config
 from audio_lab.diagnostics.metrics import StatusLog
+from audio_lab.identity.decision import AccessTier, decide
+from audio_lab.identity.errors import IdentityStoreError
+from audio_lab.identity.matcher import Matcher, build_gallery
+from audio_lab.identity.store import DEFAULT_DB_FILENAME, SCHEMA_VERSION, IdentityStore
+from audio_lab.speech.embedder import MODEL_ID
+from audio_lab.speech.worker import ModelState, SpeechWorker
 from audio_lab.ui import theme
 from audio_lab.ui.control_panel import ControlPanel
+from audio_lab.ui.enroll_dialog import EnrollDialog
+from audio_lab.ui.manage_dialog import ManageDialog
 from audio_lab.ui.waveform_widget import WaveformWidget
 
 CONSENT_TEXT = (
@@ -40,16 +56,34 @@ CONSENT_TEXT = (
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, recorder: AudioRecorder | None = None) -> None:
+    def __init__(
+        self,
+        recorder: AudioRecorder | None = None,
+        speech_worker: SpeechWorker | None = None,
+        store: IdentityStore | None = None,
+    ) -> None:
         super().__init__()
         self.setWindowTitle("AUDIO LAB")
         self._settings = config.load_settings()
         self._status_log = StatusLog()
         self._last_clip: AudioClip | None = None
+        self._model_ready = False
+        self._enroll_dialog: EnrollDialog | None = None
+        self._matcher = Matcher([])
 
         self.recorder = recorder or AudioRecorder()
         self.recorder.setParent(self)
         self.player = ClipPlayer(self)
+
+        self._store_error: str | None = None
+        if store is not None:
+            self.store = store
+        else:
+            try:
+                self.store = IdentityStore(config.APP_DATA_DIR / DEFAULT_DB_FILENAME)
+            except IdentityStoreError as exc:
+                self.store = None
+                self._store_error = str(exc)
 
         self._recording_started: float | None = None
         self._duration_timer = QTimer(self)
@@ -61,7 +95,22 @@ class MainWindow(QMainWindow):
         self._restore_geometry()
 
         self.log_event(self._build_info())
+        if self._store_error:
+            self.log_event(f"STORE ERROR: {self._store_error} — RUNNING WITHOUT IDENTITIES")
         self._refresh_devices()
+        self._rebuild_gallery()
+        self._start_speech_worker(speech_worker)
+
+    def _start_speech_worker(self, worker: SpeechWorker | None) -> None:
+        self.speech_worker = worker or SpeechWorker()
+        self._speech_thread = QThread(self)
+        self.speech_worker.moveToThread(self._speech_thread)
+        self._speech_thread.started.connect(self.speech_worker.run)
+        self.speech_worker.model_state_changed.connect(self._on_model_state)
+        self.speech_worker.analysis_ready.connect(self._on_analysis)
+        self.speech_worker.error.connect(self.log_event)
+        self.speech_worker.finished.connect(self._speech_thread.quit)
+        self._speech_thread.start()
 
     # -- layout --
 
@@ -88,11 +137,20 @@ class MainWindow(QMainWindow):
 
         columns.addLayout(left, stretch=1)
 
-        self.panel = ControlPanel()
+        self.panel = ControlPanel(
+            recognition_threshold=self._settings.recognition_threshold,
+            private_access_threshold=self._settings.private_access_threshold,
+            match_margin=self._settings.match_margin,
+        )
         self.panel.arm_requested.connect(self._arm)
         self.panel.stop_requested.connect(self._disarm)
         self.panel.device_selected.connect(self._on_device_selected)
         self.panel.play_last_requested.connect(self._play_last)
+        self.panel.enroll_requested.connect(self._open_enroll)
+        self.panel.manage_requested.connect(self._open_manage)
+        self.panel.recognition_threshold_changed.connect(self._on_recognition_threshold)
+        self.panel.private_threshold_changed.connect(self._on_private_threshold)
+        self.panel.margin_changed.connect(self._on_margin)
         columns.addWidget(self.panel)
 
         outer.addLayout(columns, stretch=1)
@@ -116,7 +174,8 @@ class MainWindow(QMainWindow):
     # -- build info --
 
     def _build_info(self) -> str:
-        info = f"V{__version__}"
+        model_short = MODEL_ID.rsplit("/", maxsplit=1)[-1].upper()
+        info = f"V{__version__} · MODEL {model_short} · SCHEMA V{SCHEMA_VERSION}"
         try:
             sha = subprocess.run(
                 ["git", "rev-parse", "--short", "HEAD"],
@@ -183,12 +242,17 @@ class MainWindow(QMainWindow):
         )
         self.panel.set_armed(armed)
         self.ptt_button.setEnabled(state in (RecorderState.ARMED.value, RecorderState.RECORDING.value))
+        self._refresh_enroll_enabled()
 
     def _on_clip_ready(self, clip: AudioClip) -> None:
+        if self._enrollment_active():
+            return  # the enrollment dialog owns clips while it is open
         self._last_clip = clip
         summary = f"{clip.duration_s:.1f}s  {clip.rms_dbfs:.0f} dBFS"
         self.panel.show_last_clip(summary, playable=True)
         self.log_event(f"CLIP CAPTURED: {summary}")
+        if self._model_ready:
+            self.speech_worker.submit(clip)
 
     def _on_clip_rejected(self, reason: str) -> None:
         self.panel.show_last_clip(reason, playable=self._last_clip is not None)
@@ -201,6 +265,128 @@ class MainWindow(QMainWindow):
         if self._last_clip is not None:
             self.log_event("PLAYBACK: LAST CLIP")
             self.player.play(self._last_clip)
+
+    # -- speaker identity --
+
+    def _enrollment_active(self) -> bool:
+        return self._enroll_dialog is not None and self._enroll_dialog.isVisible()
+
+    def _refresh_enroll_enabled(self) -> None:
+        self.panel.set_enroll_enabled(
+            self._model_ready
+            and self.store is not None
+            and self.recorder.state
+            in (RecorderState.ARMED, RecorderState.RECORDING)
+        )
+
+    def _on_model_state(self, state: str) -> None:
+        self._model_ready = state == ModelState.READY.value
+        self.panel.show_model_state(state, is_error=state == ModelState.FAILED.value)
+        self.log_event(state)
+        self._refresh_enroll_enabled()
+
+    def _rebuild_gallery(self) -> None:
+        if self.store is None:
+            self._matcher = Matcher([])
+            return
+        try:
+            gallery, warnings = build_gallery(self.store, MODEL_ID)
+        except IdentityStoreError as exc:
+            self.log_event(f"GALLERY ERROR: {exc}")
+            self._matcher = Matcher([])
+            return
+        self._matcher = Matcher(gallery)
+        for warning in warnings:
+            self.log_event(f"GALLERY: {warning.upper()}")
+        self.log_event(
+            f"GALLERY LOADED: {self._matcher.identity_count} SPEAKERS, "
+            f"{self._matcher.sample_count} SAMPLES"
+        )
+
+    def _on_analysis(self, analysis) -> None:
+        if self._enrollment_active():
+            return  # enrollment analyses belong to the dialog
+        evidence = analysis.evidence
+        probe = (
+            evidence.embedding
+            if evidence.embedding is not None
+            else np.zeros(1, dtype=np.float32)  # matcher maps this to UNKNOWN
+        )
+        match = self._matcher.match(
+            probe,
+            threshold=self._settings.recognition_threshold,
+            margin=self._settings.match_margin,
+            top_k=self._settings.top_k,
+        )
+        decision = decide(
+            match, private_access_threshold=self._settings.private_access_threshold
+        )
+        sim = f"{decision.similarity:.2f}" if decision.similarity is not None else "--"
+        second = f"{decision.second_best:.2f}" if decision.second_best is not None else "--"
+        if decision.tier is AccessTier.PRIVATE_VERIFIED:
+            speaker_text = f"SPEAKER  {decision.display_name.upper()}"
+            decision_text = "PRIVATE ACCESS GRANTED"
+            dimmed = False
+        elif decision.tier is AccessTier.RECOGNIZED:
+            speaker_text = f"SPEAKER  PROBABLY {decision.display_name.upper()}"
+            decision_text = "PRIVATE ACCESS DENIED"
+            dimmed = True
+        else:
+            speaker_text = "SPEAKER  UNKNOWN"
+            decision_text = "NO ACCESS — UNKNOWN SPEAKER"
+            dimmed = True
+        self.panel.show_speaker(speaker_text, f"SIM  {sim}    2ND  {second}")
+        self.panel.show_decision(decision_text, decision.reason, dimmed)
+        self.log_event(
+            f"{speaker_text.replace('  ', ': ')} ({sim}) — {decision.reason} "
+            f"[EMBED {analysis.embed_ms:.0f} MS]"
+        )
+
+    def _open_enroll(self) -> None:
+        if self.store is None or self._enrollment_active():
+            return
+        self._enroll_dialog = EnrollDialog(
+            self.recorder,
+            self.speech_worker,
+            self.player,
+            self.store,
+            MODEL_ID,
+            parent=self,
+        )
+        self._enroll_dialog.enrolled.connect(
+            lambda record: self.log_event(
+                f"IDENTITY ENROLLED: {record.display_name.upper()} "
+                f"({record.sample_count} SAMPLES)"
+            )
+        )
+        result = self._enroll_dialog.exec()
+        self._enroll_dialog = None
+        if result == QDialog.DialogCode.Accepted:
+            self._rebuild_gallery()
+        else:
+            self.log_event("ENROLLMENT CANCELED — NOTHING STORED")
+
+    def _open_manage(self) -> None:
+        if self.store is None:
+            return
+        dialog = ManageDialog(self.store, parent=self)
+        dialog.exec()
+        if dialog.changed:
+            self._rebuild_gallery()
+
+    # -- thresholds --
+
+    def _on_recognition_threshold(self, value: float) -> None:
+        self._settings.recognition_threshold = value
+        self._save_settings()
+
+    def _on_private_threshold(self, value: float) -> None:
+        self._settings.private_access_threshold = value
+        self._save_settings()
+
+    def _on_margin(self, value: float) -> None:
+        self._settings.match_margin = value
+        self._save_settings()
 
     def _set_ptt_recording_look(self, recording: bool) -> None:
         self.ptt_button.setText("● RECORDING — RELEASE TO SEND" if recording else "HOLD TO TALK (SPACE)")
@@ -256,5 +442,10 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event) -> None:  # noqa: N802 (Qt override)
         self.player.stop()
         self.recorder.disarm()
+        self.speech_worker.request_stop()
+        self._speech_thread.quit()
+        self._speech_thread.wait(5000)
+        if self.store is not None:
+            self.store.close()
         self._save_settings(include_geometry=True)
         super().closeEvent(event)
