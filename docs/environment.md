@@ -53,6 +53,13 @@ Dated, running record of the machine, toolchain, and every measured number
 
 ## CP4 gate — real-input level calibration (2026-08-10)
 
+**Gate outcome (2026-08-10): PASSED after five fix rounds** — record →
+review confirmed clean and clearly audible by ear once (a) the macOS
+input volume was raised from 14% and surfaced in the UI, and (b) playback
+moved off PortAudio onto QAudioSink/CoreAudio. Remaining optional check
+(TCC revoke → `MIC PERMISSION SUSPECTED`) validated in code and against
+real silent capture, not re-run manually.
+
 Live recorder measurements on the built-in mic during the first user test:
 quiet-room floor **−63 to −71 dBFS RMS**; a person speaking near the
 laptop **≈ −45 dBFS RMS, peak ≈ 0.09**. The original −45 dBFS quiet gate
