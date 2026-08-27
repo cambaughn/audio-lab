@@ -113,6 +113,24 @@ General lesson, worth carrying to Batch 2 calibration: when a signal
 looks wrong, measure every stage from the OS inward before touching
 code; and a user's "this works everywhere else" is data, not noise.
 
+## Observation 008
+Crackle persisted through every gain change because the gain was never
+the problem: playback ran through PortAudio's *output* side (sd.play)
+while the input stream stayed armed — a full-duplex arrangement no other
+macOS app uses, and the one stage of the chain that was never measured
+(the acoustic loopback tests that tried turned out to be contaminated by
+room noise and run-to-run routing variance — you cannot reliably measure
+speaker output through a laptop mic in an uncontrolled room). "What do
+all the working programs have in common that we don't" was the right
+diagnostic question, asked by the user, twice.
+
+Decision: playback moved off PortAudio entirely — QAudioSink plays clips
+from memory through CoreAudio, the same output path every other macOS
+app uses. PortAudio now handles input only; one library per direction.
+Verified structurally (bit-exact samples reach the sink; real sink
+constructs against the default output) — but the ear at the gate is the
+only instrument that can confirm the crackle is gone.
+
 ---
 
 # Future Work — declined rabbit-holes

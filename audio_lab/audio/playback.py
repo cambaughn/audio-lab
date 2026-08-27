@@ -1,27 +1,62 @@
-"""Clip playback for review — straight from memory, no files, no processing.
+"""Clip playback for review — in-memory, through Qt's native audio path.
 
-Clips are played back exactly as captured. An earlier version boosted
-quiet clips for audibility; that masked the real cause of quiet capture
-(a low macOS input volume) and amplified the mic's noise floor into an
-audible hum (learnings.md Observations 005–007). If review playback is
-quiet, the input level is quiet — the MICROPHONE panel now says so.
+Playback deliberately does NOT go through PortAudio: the app's input
+stream is armed while clips are reviewed, and sharing one PortAudio host
+with a simultaneous output stream produced crackle that three rounds of
+gain changes never touched (learnings.md Observation 008). QAudioSink
+plays straight from a memory buffer via CoreAudio — the same output path
+every other macOS app uses — and raw audio still never touches disk.
+
+Samples are played exactly as captured: no gain, no processing.
 """
+
+from PySide6.QtCore import QBuffer, QByteArray, QIODevice, QObject
+from PySide6.QtMultimedia import QAudioFormat, QAudioSink, QMediaDevices
 
 from audio_lab.audio.clip import AudioClip
 
 
-def play_clip(audio_clip: AudioClip, player=None) -> None:
-    """Play a clip (non-blocking). Injectable player for tests."""
-    if player is None:
-        import sounddevice as sd
+def _build_format(sample_rate: int) -> QAudioFormat:
+    fmt = QAudioFormat()
+    fmt.setSampleRate(sample_rate)
+    fmt.setChannelCount(1)
+    fmt.setSampleFormat(QAudioFormat.SampleFormat.Float)
+    return fmt
 
-        player = sd.play
-    player(audio_clip.samples, audio_clip.sample_rate)
 
+class ClipPlayer(QObject):
+    """Plays one clip at a time from memory. Injectable sink for tests."""
 
-def stop_playback(stopper=None) -> None:
-    if stopper is None:
-        import sounddevice as sd
+    def __init__(self, parent=None, sink_factory=None) -> None:
+        super().__init__(parent)
+        self._sink_factory = sink_factory or self._default_sink_factory
+        self._sink = None
+        self._buffer: QBuffer | None = None
 
-        stopper = sd.stop
-    stopper()
+    @staticmethod
+    def _default_sink_factory(fmt: QAudioFormat):
+        device = QMediaDevices.defaultAudioOutput()
+        if not device.isFormatSupported(fmt):
+            fmt = device.preferredFormat()  # let CoreAudio pick; float 16 kHz
+        return QAudioSink(device, fmt)  # is universally supported in practice
+
+    def play(self, audio_clip: AudioClip) -> None:
+        self.stop()
+        fmt = _build_format(audio_clip.sample_rate)
+        self._sink = self._sink_factory(fmt)
+        self._buffer = QBuffer(self)
+        self._buffer.setData(QByteArray(audio_clip.samples.astype("float32").tobytes()))
+        self._buffer.open(QIODevice.OpenModeFlag.ReadOnly)
+        self._sink.start(self._buffer)
+
+    def stop(self) -> None:
+        if self._sink is not None:
+            try:
+                self._sink.stop()
+            except Exception:
+                pass
+            self._sink = None
+        if self._buffer is not None:
+            self._buffer.close()
+            self._buffer.deleteLater()
+            self._buffer = None

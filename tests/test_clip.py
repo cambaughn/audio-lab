@@ -76,14 +76,37 @@ class TestGates:
 
 
 class TestPlayback:
-    def test_play_clip_passes_samples_unmodified(self):
-        from audio_lab.audio.playback import play_clip
+    def test_player_writes_exact_samples_to_sink(self, qt_core_app):
+        from audio_lab.audio.playback import ClipPlayer
 
-        clip = make_clip(tone(1.0, amplitude=0.03))
-        played = []
-        play_clip(clip, player=lambda s, sr: played.append((s, sr)))
-        assert played[0][1] == SAMPLE_RATE
-        assert np.array_equal(played[0][0], clip.samples)  # no gain, no processing
+        class FakeSink:
+            def __init__(self):
+                self.started_with = None
+                self.stopped = False
+
+            def start(self, buffer):
+                self.started_with = bytes(buffer.data().data())
+
+            def stop(self):
+                self.stopped = True
+
+        sinks = []
+
+        def factory(fmt):
+            assert fmt.sampleRate() == SAMPLE_RATE
+            assert fmt.channelCount() == 1
+            sink = FakeSink()
+            sinks.append(sink)
+            return sink
+
+        clip = make_clip(tone(0.5, amplitude=0.3))
+        player = ClipPlayer(sink_factory=factory)
+        player.play(clip)
+        assert sinks[0].started_with == clip.samples.tobytes()  # bit-exact, no gain
+        player.play(clip)  # second play stops the first sink
+        assert sinks[0].stopped and len(sinks) == 2
+        player.stop()
+        assert sinks[1].stopped
 
 
 class TestSystemInputVolume:

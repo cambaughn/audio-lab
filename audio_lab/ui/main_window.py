@@ -21,8 +21,8 @@ from PySide6.QtWidgets import (
 )
 
 from audio_lab import __version__
-from audio_lab.audio import playback
 from audio_lab.audio.capture import AudioRecorder, RecorderState
+from audio_lab.audio.playback import ClipPlayer
 from audio_lab.audio.clip import AudioClip
 from audio_lab.audio.devices import list_input_devices
 from audio_lab.audio.system_input import LOW_INPUT_VOLUME, read_input_volume
@@ -49,6 +49,7 @@ class MainWindow(QMainWindow):
 
         self.recorder = recorder or AudioRecorder()
         self.recorder.setParent(self)
+        self.player = ClipPlayer(self)
 
         self._recording_started: float | None = None
         self._duration_timer = QTimer(self)
@@ -199,7 +200,7 @@ class MainWindow(QMainWindow):
     def _play_last(self) -> None:
         if self._last_clip is not None:
             self.log_event("PLAYBACK: LAST CLIP")
-            playback.play_clip(self._last_clip)
+            self.player.play(self._last_clip)
 
     def _set_ptt_recording_look(self, recording: bool) -> None:
         self.ptt_button.setText("● RECORDING — RELEASE TO SEND" if recording else "HOLD TO TALK (SPACE)")
@@ -253,6 +254,7 @@ class MainWindow(QMainWindow):
         config.save_settings(self._settings)
 
     def closeEvent(self, event) -> None:  # noqa: N802 (Qt override)
+        self.player.stop()
         self.recorder.disarm()
         self._save_settings(include_geometry=True)
         super().closeEvent(event)
