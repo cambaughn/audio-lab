@@ -60,6 +60,16 @@ moved off PortAudio onto QAudioSink/CoreAudio. Remaining optional check
 (TCC revoke → `MIC PERMISSION SUSPECTED`) validated in code and against
 real silent capture, not re-run manually.
 
+## CP5 — speaker model measurements (2026-08-10)
+
+ECAPA-TDNN (`speechbrain/spkrec-ecapa-voxceleb`, CPU): first-ever load
+including ~85 MB download **11.9 s**; warm load **1.8 s**; speechbrain
+import alone ~5 s cold. Per-clip embed (3 s clip): **29–45 ms** — latency
+is a non-issue at this stage. Model files live in the Hugging Face cache
+(the app-data `models/` dir holds symlinks).
+
+## CP4 gate context (2026-08-10)
+
 Live recorder measurements on the built-in mic during the first user test:
 quiet-room floor **−63 to −71 dBFS RMS**; a person speaking near the
 laptop **≈ −45 dBFS RMS, peak ≈ 0.09**. The original −45 dBFS quiet gate
