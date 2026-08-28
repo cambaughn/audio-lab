@@ -38,11 +38,12 @@ def main() -> int:
     print(f"impostor (cross-speaker):               {summarize(dist.impostor)}")
     suggestion = suggest_thresholds(dist)
     if suggestion is None:
-        print("not enough data for suggestions (need 2+ enrolled speakers)")
+        print("no enrolled samples — nothing to calibrate")
         return 1
     print(
-        f"\nadvisory starting points — set the sliders yourself:\n"
-        f"  recognition threshold   ~ {suggestion.recognition:.2f}\n"
+        f"\nsuggested operating points ({suggestion.basis}) — the app applies\n"
+        f"these automatically on every enrollment change:\n"
+        f"  recognition threshold    ~ {suggestion.recognition:.2f}\n"
         f"  private-access threshold ~ {suggestion.private_access:.2f}"
     )
     if dist.genuine and dist.impostor and min(dist.genuine) <= max(dist.impostor):

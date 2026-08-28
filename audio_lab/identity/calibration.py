@@ -28,6 +28,7 @@ class ScoreDistributions:
 class ThresholdSuggestion:
     recognition: float
     private_access: float
+    basis: str  # human-readable provenance, e.g. "12 GENUINE / 12 IMPOSTOR"
 
 
 def score_distributions(
@@ -60,16 +61,29 @@ def score_distributions(
 
 
 def suggest_thresholds(dist: ScoreDistributions) -> ThresholdSuggestion | None:
-    """Advisory starting points; None when there is not enough data."""
-    if not dist.genuine or not dist.impostor:
+    """Suggested operating points; None only when nobody is enrolled.
+
+    With impostor data (2+ speakers): recognition sits midway between the
+    worst genuine and best impostor score. With one speaker there is no
+    confusion pair yet, so both thresholds derive from the genuine spread
+    alone — refined automatically when a second speaker enrolls.
+    """
+    if not dist.genuine:
         return None
     min_genuine = min(dist.genuine)
-    max_impostor = max(dist.impostor)
-    recognition = round((min_genuine + max_impostor) / 2.0, 2)
+    if dist.impostor:
+        max_impostor = max(dist.impostor)
+        recognition = round((min_genuine + max_impostor) / 2.0, 2)
+        basis = f"{len(dist.genuine)} GENUINE / {len(dist.impostor)} IMPOSTOR"
+    else:
+        recognition = round(min_genuine - 0.20, 2)
+        basis = f"{len(dist.genuine)} GENUINE ONLY (1 SPEAKER)"
     recognition = float(np.clip(recognition, 0.05, 0.95))
-    private_access = round(max(recognition + 0.10, min_genuine - 0.03), 2)
+    private_access = round(max(recognition + 0.10, min_genuine - 0.05), 2)
     private_access = float(np.clip(private_access, recognition, 0.95))
-    return ThresholdSuggestion(recognition=recognition, private_access=private_access)
+    return ThresholdSuggestion(
+        recognition=recognition, private_access=private_access, basis=basis
+    )
 
 
 def summarize(values: tuple[float, ...]) -> str:

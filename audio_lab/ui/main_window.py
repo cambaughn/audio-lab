@@ -36,6 +36,7 @@ from audio_lab.audio.devices import list_input_devices
 from audio_lab.audio.system_input import LOW_INPUT_VOLUME, read_input_volume
 from audio_lab.config import settings as config
 from audio_lab.diagnostics.metrics import StatusLog
+from audio_lab.identity import calibration
 from audio_lab.identity.decision import AccessTier, decide
 from audio_lab.identity.errors import IdentityStoreError
 from audio_lab.identity.matcher import Matcher, build_gallery
@@ -302,6 +303,35 @@ class MainWindow(QMainWindow):
             f"GALLERY LOADED: {self._matcher.identity_count} SPEAKERS, "
             f"{self._matcher.sample_count} SAMPLES"
         )
+        self._auto_calibrate()
+
+    def _auto_calibrate(self) -> None:
+        """Recalibrate thresholds from enrolled data on every gallery change.
+
+        The sliders remain manual overrides between enrollment changes; each
+        enrollment change re-derives them from measured data (user feedback:
+        calibration should never be a separate chore)."""
+        try:
+            dist = calibration.score_distributions(self.store, MODEL_ID)
+        except IdentityStoreError as exc:
+            self.log_event(f"CALIBRATION SKIPPED: {exc}")
+            return
+        suggestion = calibration.suggest_thresholds(dist)
+        if suggestion is None:
+            return
+        self._settings.recognition_threshold = suggestion.recognition
+        self._settings.private_access_threshold = suggestion.private_access
+        self.panel.set_thresholds(suggestion.recognition, suggestion.private_access)
+        self._save_settings()
+        self.log_event(
+            f"THRESHOLDS AUTO-CALIBRATED: RECOG {suggestion.recognition:.2f} "
+            f"PRIVATE {suggestion.private_access:.2f} ({suggestion.basis})"
+        )
+        if dist.genuine and dist.impostor and min(dist.genuine) <= max(dist.impostor):
+            self.log_event(
+                "WARNING: GENUINE AND IMPOSTOR SCORES OVERLAP — VOICES MAY "
+                "NOT SEPARATE RELIABLY"
+            )
 
     def _on_analysis(self, analysis) -> None:
         if self._enrollment_active():

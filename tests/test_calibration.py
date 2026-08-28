@@ -41,11 +41,22 @@ class TestCalibration:
         assert max(dist.impostor) < suggestion.recognition < min(dist.genuine)
         assert suggestion.private_access >= suggestion.recognition + 0.10 - 1e-9
 
-    def test_single_speaker_gives_no_impostors(self, tmp_path):
+    def test_single_speaker_suggests_from_genuine_only(self, tmp_path):
         with IdentityStore(tmp_path / "s.db") as store:
             enroll(store, "Cameron", voice(1))
             dist = score_distributions(store, MODEL)
         assert len(dist.genuine) == 6 and dist.impostor == ()
+        suggestion = suggest_thresholds(dist)
+        assert suggestion is not None
+        assert "1 SPEAKER" in suggestion.basis
+        assert suggestion.recognition < min(dist.genuine)
+        assert suggestion.recognition < suggestion.private_access <= 0.95
+        # every genuine sample would still clear the private threshold
+        assert suggestion.private_access <= min(dist.genuine)
+
+    def test_empty_store_suggests_nothing(self, tmp_path):
+        with IdentityStore(tmp_path / "s.db") as store:
+            dist = score_distributions(store, MODEL)
         assert suggest_thresholds(dist) is None
 
     def test_summarize_handles_empty(self):

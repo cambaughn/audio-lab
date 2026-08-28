@@ -133,14 +133,48 @@ only instrument that can confirm the crackle is gone.
 
 ---
 
+## Observation 009
+First real-voice calibration data (Cameron, 6 samples, built-in mic):
+leave-one-out genuine scores 0.642–0.728 — comfortably above the guessed
+0.55 private default, and no sign yet that the mic's hum floor
+(Observation 006) hurts embeddings. But the gate surfaced a workflow
+finding: a separate calibration script + manual slider-setting felt
+clunky ("why can't it do that step automatically?"). Measurement that
+requires a chore doesn't get done.
+
+Decision: calibration now runs automatically on every enrollment change
+and applies its suggested thresholds itself (single-speaker genuine-only
+heuristic until a second speaker exists; sliders remain live overrides
+between changes; overlap still warns loudly). The script survives only as
+a detailed-numbers view for the docs.
+
+## Observation 010
+User direction after using push-to-talk: PTT is acceptable for v0.1, but
+the desired end state is fluid, open-mic interaction — the audio analogue
+of Identity Lab's continuous live recognition, where the system simply
+knows who is present and speaking without a button.
+
+Decision: v0.1 stays push-to-talk (deliberate utterance boundaries keep
+the privacy experiment clean and honor the no-always-on-recording
+boundary). Open-mic continuous listening is promoted from "declined
+rabbit-hole" to the headline roadmap item for the next version — it needs
+VAD utterance segmentation and continuous attribution, and the current
+capture→evidence→decision→routing separation was kept clean so only the
+capture front-end has to change.
+
+---
+
 # Future Work — declined rabbit-holes
 
 Each entry is something we chose **not** to build for v0.1, with one line
 on why it doesn't change what we learn.
 
-- **VAD / SNR estimation / noise reduction** — push-to-talk already gives
-  deliberate utterance boundaries; duration/level/clipping gates are
-  enough to answer the question.
+- **Open-mic continuous listening** — the roadmap headline for after
+  v0.1 (Observation 010): VAD utterance segmentation + continuous
+  attribution replacing the PTT front-end. Deferred, not declined.
+- **VAD / SNR estimation / noise reduction for PTT** — push-to-talk
+  already gives deliberate utterance boundaries; duration/level/clipping
+  gates are enough to answer the v0.1 question.
 - **Streaming / partial STT** — turn latency is measured and reported;
   streaming changes feel, not findings, at this stage.
 - **Latency micro-optimization** beyond the <8 s end-to-end target —

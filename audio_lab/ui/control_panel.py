@@ -231,6 +231,18 @@ class ControlPanel(QWidget):
     def set_enroll_enabled(self, enabled: bool) -> None:
         self.enroll_button.setEnabled(enabled)
 
+    def set_thresholds(self, recognition: float, private_access: float) -> None:
+        """Move the sliders programmatically (auto-calibration) without
+        re-emitting the change signals."""
+        for slider, label, value in (
+            (self.recognition_slider, self.recognition_value, recognition),
+            (self.private_slider, self.private_value, private_access),
+        ):
+            slider.blockSignals(True)
+            slider.setValue(round(value * 100))
+            slider.blockSignals(False)
+            label.setText(f"{value:.2f}")
+
     def set_devices(self, devices: list[InputDevice], selected_name: str | None) -> None:
         self._devices = devices
         self.device_combo.blockSignals(True)
