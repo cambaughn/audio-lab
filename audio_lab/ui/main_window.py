@@ -369,7 +369,8 @@ class MainWindow(QMainWindow):
         self.panel.show_decision(decision_text, decision.reason, dimmed)
         self.log_event(
             f"{speaker_text.replace('  ', ': ')} ({sim}) — {decision.reason} "
-            f"[EMBED {analysis.embed_ms:.0f} MS]"
+            f"[{analysis.clip.duration_s:.1f}S · {analysis.clip.rms_dbfs:.0f} dBFS "
+            f"· EMBED {analysis.embed_ms:.0f} MS]"
         )
 
     def _open_enroll(self) -> None:
