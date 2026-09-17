@@ -79,7 +79,12 @@ def suggest_thresholds(dist: ScoreDistributions) -> ThresholdSuggestion | None:
         recognition = round(min_genuine - 0.20, 2)
         basis = f"{len(dist.genuine)} GENUINE ONLY (1 SPEAKER)"
     recognition = float(np.clip(recognition, 0.05, 0.95))
-    private_access = round(max(recognition + 0.10, min_genuine - 0.05), 2)
+    # Live-variance allowance (learnings Observation 016): enrollment-day
+    # genuine scores run ~0.1-0.2 higher than day-to-day live utterances
+    # (input-level drift, voice state, distance), while impostor scores
+    # stay far below. The private threshold therefore sits 0.15 under the
+    # worst enrollment-day genuine score, never below recognition + 0.10.
+    private_access = round(max(recognition + 0.10, min_genuine - 0.15), 2)
     private_access = float(np.clip(private_access, recognition, 0.95))
     return ThresholdSuggestion(
         recognition=recognition, private_access=private_access, basis=basis

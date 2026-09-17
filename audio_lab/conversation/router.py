@@ -39,7 +39,11 @@ PERSONA = (
     "conversation: facts you have been given are already listed in these "
     "instructions. If the speaker asks you to remember something, ask them "
     "to repeat it as a sentence starting with the word 'remember' — that "
-    "phrasing is what saves it."
+    "phrasing is what saves it. The application also identifies speakers "
+    "by voice before every turn and states who is talking below — trust "
+    "that identification; you never need to verify anyone yourself, and "
+    "everything in these instructions was selected for the current "
+    "speaker's own authorization level."
 )
 
 HISTORY_LIMIT = 20
@@ -103,7 +107,10 @@ class ContextRouter:
             LlmMessage(role=m.role, content=m.content)
             for m in self._store.recent_messages(context_id, self._history_limit)
         )
-        identity_line = f"You are speaking with {decision.display_name}."
+        identity_line = (
+            f"You are speaking with {decision.display_name}, "
+            "identified by voice for this turn."
+        )
         return self._bundle(
             ContextScope.PRIVATE, decision.display_name, identity_line, facts, history
         )

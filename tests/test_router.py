@@ -22,7 +22,10 @@ class TestBundles:
         assert bundle.scope is ContextScope.PRIVATE
         assert bundle.speaker_label == "Cameron"
         assert bundle.system_prompt.startswith(PERSONA)
-        assert "You are speaking with Cameron." in bundle.system_prompt
+        assert (
+            "You are speaking with Cameron, identified by voice for this turn."
+            in bundle.system_prompt
+        )
         assert any(CANARY_SHARED in f for f in bundle.facts)
         assert len(bundle.messages) == 2  # seeded history
         assert "SCOPE PRIVATE" in bundle.debug_summary

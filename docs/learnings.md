@@ -252,6 +252,35 @@ deterministic command surface needs a discovery mechanism, and the LLM
 itself is a good one; (b) a model embedded in a harness will guess wrong
 about its own capabilities unless the prompt states them.
 
+## Observation 016
+The first live adversarial session was the strongest evidence yet that
+the structural boundary works — and that everything *around* it is where
+the findings live. The private fact (4417) appeared only in the verified
+speaker's requests: an unknown guest got refusals backed by genuine
+absence, and — the striking part — the *owner himself* couldn't retrieve
+it on turns scoring 0.51 and 0.45, because they fell below the 0.52
+private threshold. Uncertainty demoting privilege worked exactly as
+designed, on the person it protects.
+
+Three problems surfaced with it. (1) The model narrated its harness
+wrongly — "I can't verify voices" while sitting behind a voice-verifier,
+and "anyone in this session could have seen it" about history that only
+the verified owner ever receives. Confident, wrong, and
+trust-destroying. (2) The private threshold (enrollment-day min-genuine
+minus 0.05) flapped at the live noise floor: verified-speaker utterances
+span 0.43–0.66 across sessions while impostors sit at ~0.10 — a canyon
+the threshold wasn't using. (3) The user's private *history* carried the
+fact even though the memory trigger never fired — retrieval worked by
+accident of the 20-message history window, not durably.
+
+Decision: the persona now states the harness's actual capabilities
+(voice identification happens upstream; context is pre-authorized for
+the current speaker), the calibration formula gains a live-variance
+allowance (private = min_genuine − 0.15, floored at recognition + 0.10 →
+0.44 here), and the durable path remains the 'remember' trigger. Running
+theme confirmed twice in one session: tell the model what its harness
+does, or it will invent something worse.
+
 ---
 
 # Future Work — declined rabbit-holes
