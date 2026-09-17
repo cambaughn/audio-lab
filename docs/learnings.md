@@ -199,6 +199,22 @@ experiment's conditions; no further verification-accuracy work (the
 rabbit-hole register holds). The open question moves to where it always
 belonged: the context-isolation layer — Batch 4.
 
+## Observation 013
+"Local" models weren't actually local until forced to be: with every
+model file cached on disk, app startup still stalled for minutes because
+both model loaders revalidate against the Hugging Face hub by default —
+and the hub was rate-limiting this network (the same throttling turned
+the one-time 330 MB download into 87 minutes). The stall wore three
+different disguises across probes (240 s, 110 s, 3 s) because disk cache
+and network state kept shifting between runs — a reminder that a
+measurement is only as good as the environment it ran in.
+
+Decision: offline-first loading — force HF offline mode for the load
+attempt, fall back to online only when the cache is incomplete. Warm
+startup is now 3.2 s to MODEL READY and independent of network state,
+which the privacy posture arguably required all along: everything except
+the LLM request should work with the network unplugged.
+
 ---
 
 # Future Work — declined rabbit-holes

@@ -22,6 +22,8 @@ def _default_loader():
 
     from speechbrain.inference.speaker import EncoderClassifier
 
+    from audio_lab.speech.hub import load_offline_first
+
     savedir = (
         Path.home()
         / "Library"
@@ -30,8 +32,10 @@ def _default_loader():
         / "models"
         / "spkrec-ecapa-voxceleb"
     )
-    return EncoderClassifier.from_hparams(
-        source=MODEL_ID, savedir=str(savedir), run_opts={"device": "cpu"}
+    return load_offline_first(
+        lambda: EncoderClassifier.from_hparams(
+            source=MODEL_ID, savedir=str(savedir), run_opts={"device": "cpu"}
+        )
     )
 
 

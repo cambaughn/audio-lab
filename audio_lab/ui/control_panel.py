@@ -128,6 +128,18 @@ class ControlPanel(QWidget):
         speaker.addWidget(self.similarity_label)
         root.addWidget(speaker_box)
 
+        # -- TRANSCRIPT --
+        stt_box = QGroupBox("TRANSCRIPT")
+        stt = QVBoxLayout(stt_box)
+        stt.setSpacing(theme.SPACING - 4)
+        self.transcript_label = QLabel("--")
+        self.transcript_label.setWordWrap(True)
+        stt.addWidget(self.transcript_label)
+        self.latency_label = QLabel("STT  --- MS    EMBED  --- MS")
+        self.latency_label.setObjectName("secondary")
+        stt.addWidget(self.latency_label)
+        root.addWidget(stt_box)
+
         # -- AUTHORIZATION --
         auth_box = QGroupBox("AUTHORIZATION")
         auth = QVBoxLayout(auth_box)
@@ -220,6 +232,13 @@ class ControlPanel(QWidget):
     def show_speaker(self, speaker_text: str, similarity_text: str) -> None:
         self.speaker_label.setText(speaker_text)
         self.similarity_label.setText(similarity_text)
+
+    def show_transcript(self, text: str, latency_text: str, is_error: bool = False) -> None:
+        self.transcript_label.setText(text)
+        self.transcript_label.setObjectName("error" if is_error else "")
+        self.transcript_label.style().unpolish(self.transcript_label)
+        self.transcript_label.style().polish(self.transcript_label)
+        self.latency_label.setText(latency_text)
 
     def show_decision(self, decision_text: str, reason_text: str, dimmed: bool) -> None:
         self.decision_label.setText(decision_text)

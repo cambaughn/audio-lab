@@ -45,6 +45,7 @@ from audio_lab.speech.embedder import MODEL_ID
 from audio_lab.speech.worker import ModelState, SpeechWorker
 from audio_lab.ui import theme
 from audio_lab.ui.control_panel import ControlPanel
+from audio_lab.ui.conversation_view import ConversationView
 from audio_lab.ui.enroll_dialog import EnrollDialog
 from audio_lab.ui.manage_dialog import ManageDialog
 from audio_lab.ui.waveform_widget import WaveformWidget
@@ -126,6 +127,8 @@ class MainWindow(QMainWindow):
 
         left = QVBoxLayout()
         left.setSpacing(theme.SPACING)
+        self.conversation = ConversationView()
+        left.addWidget(self.conversation, stretch=2)
         self.waveform = WaveformWidget()
         left.addWidget(self.waveform, stretch=1)
 
@@ -374,10 +377,30 @@ class MainWindow(QMainWindow):
             reason += "  ·  SHORT CLIP — LONGER SPEECH GIVES STRONGER ID"
         self.panel.show_speaker(speaker_text, f"SIM  {sim}    2ND  {second}")
         self.panel.show_decision(decision_text, reason, dimmed)
+
+        # attributed transcript -> conversation view + TRANSCRIPT panel
+        label = (
+            decision.display_name.upper()
+            if decision.display_name is not None
+            else "UNKNOWN"
+        )
+        latency_text = (
+            f"STT  {analysis.transcribe_ms:4.0f} MS    EMBED  {analysis.embed_ms:3.0f} MS"
+        )
+        if analysis.transcript is None:
+            self.conversation.add_turn(label, decision.similarity, "(TRANSCRIPTION FAILED)")
+            self.panel.show_transcript("(TRANSCRIPTION FAILED)", latency_text, is_error=True)
+        elif analysis.transcript == "":
+            self.conversation.add_turn(label, decision.similarity, "(NO SPEECH DECODED)")
+            self.panel.show_transcript("(NO SPEECH DECODED)", latency_text)
+        else:
+            self.conversation.add_turn(label, decision.similarity, analysis.transcript)
+            self.panel.show_transcript(analysis.transcript, latency_text)
+
         self.log_event(
             f"{speaker_text.replace('  ', ': ')} ({sim}) — {decision.reason} "
             f"[{analysis.clip.duration_s:.1f}S · {analysis.clip.rms_dbfs:.0f} dBFS "
-            f"· EMBED {analysis.embed_ms:.0f} MS]"
+            f"· EMBED {analysis.embed_ms:.0f} MS · STT {analysis.transcribe_ms:.0f} MS]"
         )
 
     def _open_enroll(self) -> None:

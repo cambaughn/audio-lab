@@ -68,6 +68,22 @@ import alone ~5 s cold. Per-clip embed (3 s clip): **29–45 ms** — latency
 is a non-issue at this stage. Model files live in the Hugging Face cache
 (the app-data `models/` dir holds symlinks).
 
+## CP8 — speech-to-text measurements (2026-09-17)
+
+- distil-small.en (faster-whisper, CPU int8): first-ever download ~330 MB
+  — took **87 minutes** on this network due to unauthenticated HF rate
+  limiting (one-time; normally minutes).
+- Transcription of 3 s of clean synthetic speech: **1.0–1.4 s
+  (RTF 0.34–0.47)**, transcript exact. A 5 s utterance ≈ 2–2.5 s STT.
+- Embed remains 28–68 ms — STT dominates per-turn latency as planned.
+- **Cached loads stalled for minutes when the HF hub was rate-limited**,
+  even with all files local (both loaders revalidate online by default;
+  first post-download in-app load also paid cold page cache on 330 MB).
+  Fix: offline-first loading (`speech/hub.py` forces HF_HUB_OFFLINE for
+  the attempt, falls back online only if the cache is incomplete).
+  Result: **app start → MODEL READY (both models) = 3.2 s warm**,
+  network-independent.
+
 ## Batch 2 gate — two-person recognition (2026-09-16): PASSED
 
 - Enrolled: Cameron (6 samples, 2026-08-28), Riley (6 samples,
