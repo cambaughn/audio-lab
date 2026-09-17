@@ -233,6 +233,25 @@ speech + streamed TTS, reusing the same local models. "Feels live" is a
 latency-architecture property, and it layers on top of this pipeline
 rather than replacing it.
 
+## Observation 015
+The first real memory attempt bypassed the memory system entirely: the
+user said "Hey, my locker code is 4417. Can you remember that for me?" —
+natural speech puts the fact *before* the request and refers to it as
+"that", which no deterministic pattern can extract (that's anaphora, i.e.
+language understanding — exactly what we keep off the privacy-critical
+write path). The un-triggered utterance went to the LLM as plain
+conversation, and the model — ignorant of the harness around it —
+confidently mis-described its own memory ("I don't keep memories between
+sessions"), which is false here.
+
+Decision: the trigger stays deterministic (leading "remember"), but the
+persona now tells the model that the application manages durable memory
+and instructs it to coach speakers into the trigger phrasing. The
+assistant becomes the documentation. Two general findings: (a) a
+deterministic command surface needs a discovery mechanism, and the LLM
+itself is a good one; (b) a model embedded in a harness will guess wrong
+about its own capabilities unless the prompt states them.
+
 ---
 
 # Future Work — declined rabbit-holes
