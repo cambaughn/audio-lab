@@ -183,6 +183,22 @@ for *reliable* ID (~2 s) is a hard finding to carry into the future
 open-mic design: VAD segments shorter than that should expect weak
 attribution.
 
+## Observation 012
+Two-person separation on real household voices is far better than the
+experiment needs (Batch 2 gate, Cameron + Riley, 6 samples each,
+built-in mic): genuine scores 0.567–0.728 vs impostor scores 0.020–0.107
+— a 0.46-wide empty gap where thresholds can sit (auto-calibrated to
+recognition 0.34 / private 0.52). Both enrolled speakers were correctly
+attributed live, and macOS synthetic voices (Samantha, Alex) probed at
+the microphone scored 0.16–0.19 → UNKNOWN. The pre-registered worry that
+the mic's hum floor might compress the embedding space (Observation 006)
+did not materialize.
+
+Decision: speaker recognition is a solved sub-problem for this
+experiment's conditions; no further verification-accuracy work (the
+rabbit-hole register holds). The open question moves to where it always
+belonged: the context-isolation layer — Batch 4.
+
 ---
 
 # Future Work — declined rabbit-holes

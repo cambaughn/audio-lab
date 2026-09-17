@@ -68,6 +68,25 @@ import alone ~5 s cold. Per-clip embed (3 s clip): **29–45 ms** — latency
 is a non-issue at this stage. Model files live in the Hugging Face cache
 (the app-data `models/` dir holds symlinks).
 
+## Batch 2 gate — two-person recognition (2026-09-16): PASSED
+
+- Enrolled: Cameron (6 samples, 2026-08-28), Riley (6 samples,
+  2026-09-16), built-in mic.
+- Calibration (leave-one-out genuine / cross-speaker impostor):
+  genuine n=12 min 0.567 · median 0.662 · max 0.728; impostor n=12
+  min 0.020 · median 0.077 · max 0.107. Auto-applied thresholds:
+  **recognition 0.34, private 0.52**.
+- Live attribution: both speakers correctly named (Cameron 0.63–0.66 on
+  sentence-length utterances; duration probe in Observation 011 — ~1 s
+  clips score ~0.1 lower, curve saturates by ~3 s).
+- Adversarial: `say -v Samantha` / `say -v Alex` played at the mic →
+  UNKNOWN, best scores 0.16–0.19.
+- Deferred to v0.1 acceptance: manage-dialog delete → re-UNKNOWN check
+  (deletion is unit-tested; skipping avoids a pointless re-enrollment).
+- Environment note: macOS input volume drifts (75 → 50 observed between
+  sessions; external cause unknown). The panel surfaces `OS INPUT VOL`
+  on every arm.
+
 ## CP4 gate context (2026-08-10)
 
 Live recorder measurements on the built-in mic during the first user test:
