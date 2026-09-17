@@ -9,10 +9,14 @@ from PySide6.QtWidgets import QPlainTextEdit
 from audio_lab.ui import theme
 
 
-def format_turn(label: str, similarity: float | None, text: str) -> str:
-    """Pure formatting — '[CAMERON 0.63] transcript' / '[UNKNOWN] transcript'."""
+def format_turn(
+    label: str, similarity: float | None, text: str, tag: str | None = None
+) -> str:
+    """Pure formatting — '[CAMERON 0.63] transcript', optionally tagged
+    '[GUEST · EPHEMERAL — NOT PERSISTED] transcript'."""
     sim = f" {similarity:.2f}" if similarity is not None else ""
-    return f"[{label}{sim}] {text}"
+    suffix = f" · {tag}" if tag else ""
+    return f"[{label}{sim}{suffix}] {text}"
 
 
 class ConversationView(QPlainTextEdit):
@@ -27,5 +31,11 @@ class ConversationView(QPlainTextEdit):
             f"font-size: {theme.FONT_SIZE}px; }}"
         )
 
-    def add_turn(self, label: str, similarity: float | None, text: str) -> None:
-        self.appendPlainText(format_turn(label, similarity, text))
+    def add_turn(
+        self,
+        label: str,
+        similarity: float | None,
+        text: str,
+        tag: str | None = None,
+    ) -> None:
+        self.appendPlainText(format_turn(label, similarity, text, tag))

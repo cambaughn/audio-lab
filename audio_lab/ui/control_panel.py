@@ -8,6 +8,7 @@ AUTHORIZATION, TRANSCRIPT, LLM, TTS, and THRESHOLDS groups here.
 
 from PySide6.QtCore import QPoint, Qt, Signal
 from PySide6.QtWidgets import (
+    QCheckBox,
     QComboBox,
     QGroupBox,
     QHBoxLayout,
@@ -60,6 +61,8 @@ class ControlPanel(QWidget):
     play_last_requested = Signal()
     enroll_requested = Signal()
     manage_requested = Signal()
+    end_session_requested = Signal()
+    debug_toggled = Signal(bool)
     recognition_threshold_changed = Signal(float)
     private_threshold_changed = Signal(float)
     margin_changed = Signal(float)
@@ -176,6 +179,14 @@ class ControlPanel(QWidget):
         )
         root.addWidget(thr_box)
 
+        # -- LLM --
+        llm_box = QGroupBox("LLM")
+        llm = QVBoxLayout(llm_box)
+        llm.setSpacing(theme.SPACING - 4)
+        self.llm_label = QLabel("LLM  FAKE (LOCAL)")
+        llm.addWidget(self.llm_label)
+        root.addWidget(llm_box)
+
         # -- IDENTITY --
         id_box = QGroupBox("IDENTITY")
         id_layout = QVBoxLayout(id_box)
@@ -186,7 +197,24 @@ class ControlPanel(QWidget):
         self.manage_button = QPushButton("MANAGE SPEAKERS")
         self.manage_button.clicked.connect(self.manage_requested)
         id_layout.addWidget(self.manage_button)
+        self.end_session_button = QPushButton("END GUEST SESSION")
+        self.end_session_button.clicked.connect(self.end_session_requested)
+        id_layout.addWidget(self.end_session_button)
         root.addWidget(id_box)
+
+        # -- DEBUG --
+        debug_box = QGroupBox("DEBUG")
+        debug = QVBoxLayout(debug_box)
+        self.debug_check = QCheckBox("SHOW LLM REQUEST")
+        self.debug_check.toggled.connect(self.debug_toggled)
+        debug.addWidget(self.debug_check)
+        self.debug_view = QPlainTextEdit()
+        self.debug_view.setReadOnly(True)
+        self.debug_view.setFixedHeight(140)
+        self.debug_view.setVisible(False)
+        self.debug_view.setPlaceholderText("LAST OUTBOUND LLM REQUEST")
+        debug.addWidget(self.debug_view)
+        root.addWidget(debug_box)
 
         # -- EVENT LOG --
         log_box = QGroupBox("EVENT LOG")
@@ -249,6 +277,18 @@ class ControlPanel(QWidget):
 
     def set_enroll_enabled(self, enabled: bool) -> None:
         self.enroll_button.setEnabled(enabled)
+
+    def show_llm_state(self, text: str, is_error: bool = False) -> None:
+        self.llm_label.setText(text)
+        self.llm_label.setObjectName("error" if is_error else "")
+        self.llm_label.style().unpolish(self.llm_label)
+        self.llm_label.style().polish(self.llm_label)
+
+    def set_debug_visible(self, visible: bool) -> None:
+        self.debug_view.setVisible(visible)
+
+    def show_debug_request(self, text: str) -> None:
+        self.debug_view.setPlainText(text)
 
     def set_thresholds(self, recognition: float, private_access: float) -> None:
         """Move the sliders programmatically (auto-calibration) without

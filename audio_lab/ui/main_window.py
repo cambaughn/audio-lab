@@ -35,8 +35,15 @@ from audio_lab.audio.clip import AudioClip
 from audio_lab.audio.devices import list_input_devices
 from audio_lab.audio.system_input import LOW_INPUT_VOLUME, read_input_volume
 from audio_lab.config import settings as config
+from audio_lab.conversation.ephemeral import EphemeralRegistry
+from audio_lab.conversation.router import ContextRouter, build_request, detect_remember
+from audio_lab.conversation.store import ConversationStore, ConversationStoreError
+from audio_lab.conversation.store import DEFAULT_DB_FILENAME as CONVERSATIONS_DB
+from audio_lab.conversation.types import ContextScope, RememberOutcome
 from audio_lab.diagnostics.metrics import StatusLog
 from audio_lab.identity import calibration
+from audio_lab.llm.adapter import FakeLlmAdapter, RecordingAdapter
+from audio_lab.llm.worker import LlmWorker
 from audio_lab.identity.decision import AccessTier, decide
 from audio_lab.identity.errors import IdentityStoreError
 from audio_lab.identity.matcher import Matcher, build_gallery
@@ -87,6 +94,23 @@ class MainWindow(QMainWindow):
                 self.store = None
                 self._store_error = str(exc)
 
+        # conversation layer: persistent store + in-memory ephemerals + router
+        self._conversation_error: str | None = None
+        try:
+            self.conversations = ConversationStore(config.APP_DATA_DIR / CONVERSATIONS_DB)
+        except ConversationStoreError as exc:
+            self.conversations = None
+            self._conversation_error = str(exc)
+        self.ephemerals = EphemeralRegistry()
+        self.router = (
+            ContextRouter(self.conversations, self.ephemerals)
+            if self.conversations is not None
+            else None
+        )
+        self.llm_recorder = RecordingAdapter(FakeLlmAdapter())
+        self._llm_model = FakeLlmAdapter.MODEL
+        self._pending_turn = None  # (decision, transcript) awaiting LLM reply
+
         self._recording_started: float | None = None
         self._duration_timer = QTimer(self)
         self._duration_timer.setInterval(100)
@@ -99,9 +123,25 @@ class MainWindow(QMainWindow):
         self.log_event(self._build_info())
         if self._store_error:
             self.log_event(f"STORE ERROR: {self._store_error} — RUNNING WITHOUT IDENTITIES")
+        if self._conversation_error:
+            self.log_event(
+                f"CONVERSATION STORE ERROR: {self._conversation_error} — "
+                "RUNNING WITHOUT CONTEXTS"
+            )
         self._refresh_devices()
         self._rebuild_gallery()
         self._start_speech_worker(speech_worker)
+        self._start_llm_worker()
+
+    def _start_llm_worker(self) -> None:
+        self.llm_worker = LlmWorker(self.llm_recorder)
+        self._llm_thread = QThread(self)
+        self.llm_worker.moveToThread(self._llm_thread)
+        self._llm_thread.started.connect(self.llm_worker.run)
+        self.llm_worker.response_ready.connect(self._on_llm_response)
+        self.llm_worker.error.connect(self._on_llm_error)
+        self.llm_worker.finished.connect(self._llm_thread.quit)
+        self._llm_thread.start()
 
     def _start_speech_worker(self, worker: SpeechWorker | None) -> None:
         self.speech_worker = worker or SpeechWorker()
@@ -152,6 +192,10 @@ class MainWindow(QMainWindow):
         self.panel.play_last_requested.connect(self._play_last)
         self.panel.enroll_requested.connect(self._open_enroll)
         self.panel.manage_requested.connect(self._open_manage)
+        self.panel.end_session_requested.connect(self._end_guest_session)
+        self.panel.debug_toggled.connect(self._on_debug_toggled)
+        self.panel.debug_check.setChecked(self._settings.debug_mode)
+        self.panel.set_debug_visible(self._settings.debug_mode)
         self.panel.recognition_threshold_changed.connect(self._on_recognition_threshold)
         self.panel.private_threshold_changed.connect(self._on_private_threshold)
         self.panel.margin_changed.connect(self._on_margin)
@@ -384,17 +428,19 @@ class MainWindow(QMainWindow):
             if decision.display_name is not None
             else "UNKNOWN"
         )
+        ephemeral = decision.tier is not AccessTier.PRIVATE_VERIFIED
+        turn_tag = "EPHEMERAL — NOT PERSISTED" if ephemeral else None
         latency_text = (
             f"STT  {analysis.transcribe_ms:4.0f} MS    EMBED  {analysis.embed_ms:3.0f} MS"
         )
         if analysis.transcript is None:
-            self.conversation.add_turn(label, decision.similarity, "(TRANSCRIPTION FAILED)")
+            self.conversation.add_turn(label, decision.similarity, "(TRANSCRIPTION FAILED)", turn_tag)
             self.panel.show_transcript("(TRANSCRIPTION FAILED)", latency_text, is_error=True)
         elif analysis.transcript == "":
-            self.conversation.add_turn(label, decision.similarity, "(NO SPEECH DECODED)")
+            self.conversation.add_turn(label, decision.similarity, "(NO SPEECH DECODED)", turn_tag)
             self.panel.show_transcript("(NO SPEECH DECODED)", latency_text)
         else:
-            self.conversation.add_turn(label, decision.similarity, analysis.transcript)
+            self.conversation.add_turn(label, decision.similarity, analysis.transcript, turn_tag)
             self.panel.show_transcript(analysis.transcript, latency_text)
 
         self.log_event(
@@ -402,6 +448,75 @@ class MainWindow(QMainWindow):
             f"[{analysis.clip.duration_s:.1f}S · {analysis.clip.rms_dbfs:.0f} dBFS "
             f"· EMBED {analysis.embed_ms:.0f} MS · STT {analysis.transcribe_ms:.0f} MS]"
         )
+        if analysis.transcript:
+            self._process_turn(decision, analysis.transcript, ephemeral)
+
+    # -- the conversational turn: router -> LLM -> response --
+
+    def _process_turn(self, decision, transcript: str, ephemeral: bool) -> None:
+        if self.router is None:
+            return
+        assistant_tag = "EPHEMERAL — NOT PERSISTED" if ephemeral else None
+
+        fact = detect_remember(transcript)
+        if fact is not None:
+            outcome = self.router.handle_remember(decision, fact)
+            if outcome is RememberOutcome.SAVED_PRIVATE:
+                ack = "Noted — saved to your private memory."
+                self.log_event(f"FACT SAVED (PRIVATE/{decision.display_name.upper()})")
+            else:
+                ack = "Noted for this session only — private access not verified."
+                self.log_event("FACT NOT SAVED — PRIVATE ACCESS NOT VERIFIED")
+            self.router.record_exchange(decision, transcript, ack)
+            self.conversation.add_turn("ASSISTANT", None, ack, assistant_tag)
+            return
+
+        bundle = self.router.route(decision, transcript)
+        request = build_request(bundle, transcript, model=self._llm_model)
+        self._pending_turn = (decision, transcript, bundle, assistant_tag)
+        self.panel.show_llm_state("LLM  THINKING…")
+        self.recorder.set_enabled(False)  # one turn at a time
+        self.llm_worker.submit(request)
+
+    def _on_llm_response(self, request, response) -> None:
+        pending, self._pending_turn = self._pending_turn, None
+        self.recorder.set_enabled(True)
+        self.panel.show_llm_state(f"LLM  {self._llm_model.upper()}")
+        if pending is None:
+            return
+        decision, transcript, bundle, assistant_tag = pending
+        self.router.record_exchange(decision, transcript, response.text)
+        self.conversation.add_turn("ASSISTANT", None, response.text, assistant_tag)
+        self.log_event(f"LLM REPLY ({len(response.text)} CHARS)")
+        self._refresh_debug_panel(bundle)
+
+    def _on_llm_error(self, message: str) -> None:
+        self._pending_turn = None
+        self.recorder.set_enabled(True)
+        self.panel.show_llm_state("LLM  ERROR", is_error=True)
+        self.log_event(message)
+
+    def _refresh_debug_panel(self, bundle=None) -> None:
+        if not self._settings.debug_mode:
+            return
+        request = self.llm_recorder.last_request
+        if request is None:
+            self.panel.show_debug_request("(NO REQUEST SENT YET)")
+            return
+        header = bundle.debug_summary if bundle is not None else ""
+        self.panel.show_debug_request(
+            f"{header}\n\n=== EXACT OUTBOUND REQUEST ===\n{request.serialized()}"
+        )
+
+    def _on_debug_toggled(self, enabled: bool) -> None:
+        self._settings.debug_mode = enabled
+        self.panel.set_debug_visible(enabled)
+        self._save_settings()
+        self._refresh_debug_panel()
+
+    def _end_guest_session(self) -> None:
+        count = self.ephemerals.clear_all()
+        self.log_event(f"GUEST SESSION ENDED — {count} EPHEMERAL SESSION(S) CLEARED")
 
     def _open_enroll(self) -> None:
         if self.store is None or self._enrollment_active():
@@ -504,9 +619,14 @@ class MainWindow(QMainWindow):
         self.player.stop()
         self.recorder.disarm()
         self.speech_worker.request_stop()
+        self.llm_worker.request_stop()
         self._speech_thread.quit()
         self._speech_thread.wait(5000)
+        self._llm_thread.quit()
+        self._llm_thread.wait(5000)
         if self.store is not None:
             self.store.close()
+        if self.conversations is not None:
+            self.conversations.close()
         self._save_settings(include_geometry=True)
         super().closeEvent(event)
