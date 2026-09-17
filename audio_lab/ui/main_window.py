@@ -365,8 +365,15 @@ class MainWindow(QMainWindow):
             speaker_text = "SPEAKER  UNKNOWN"
             decision_text = "NO ACCESS — UNKNOWN SPEAKER"
             dimmed = True
+        reason = decision.reason
+        if (
+            decision.tier is not AccessTier.PRIVATE_VERIFIED
+            and analysis.clip.duration_s < 2.0
+        ):
+            # measured on this mic: ~1 s clips score ~0.1 lower than 3 s+
+            reason += "  ·  SHORT CLIP — LONGER SPEECH GIVES STRONGER ID"
         self.panel.show_speaker(speaker_text, f"SIM  {sim}    2ND  {second}")
-        self.panel.show_decision(decision_text, decision.reason, dimmed)
+        self.panel.show_decision(decision_text, reason, dimmed)
         self.log_event(
             f"{speaker_text.replace('  ', ': ')} ({sim}) — {decision.reason} "
             f"[{analysis.clip.duration_s:.1f}S · {analysis.clip.rms_dbfs:.0f} dBFS "

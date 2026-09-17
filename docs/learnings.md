@@ -162,6 +162,27 @@ VAD utterance segmentation and continuous attribution, and the current
 capture→evidence→decision→routing separation was kept clean so only the
 capture front-end has to change.
 
+## Observation 011
+A structured live probe (one speaker, 9 utterances) quantified the
+duration–evidence relationship on real hardware: ~1 s utterances scored
+0.40–0.55 (one dropped below the recognition threshold → UNKNOWN), while
+3 s and 6 s utterances scored 0.63–0.66 — indistinguishable from the
+enrollment-time genuine distribution (0.64–0.73). A report of "low
+confidence / random UNKNOWNs" was actually two stacked causes: short
+test phrases, plus the OS input volume having silently drifted from 75
+back to 50. Notably, longer speech beyond ~3 s bought nothing — the
+evidence curve saturates fast.
+
+Decision: no threshold changes — recognition on sentence-length speech is
+healthy, and a short clip earning less access is the monotone-privilege
+design working, now empirically grounded ("the extra verification turn is
+just a longer phrase"). Added a visible hint when a sub-2 s clip yields a
+non-private result, and the attribution log now records duration/level
+per utterance so this data keeps collecting itself. The duration floor
+for *reliable* ID (~2 s) is a hard finding to carry into the future
+open-mic design: VAD segments shorter than that should expect weak
+attribution.
+
 ---
 
 # Future Work — declined rabbit-holes
