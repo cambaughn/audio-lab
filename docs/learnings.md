@@ -215,6 +215,24 @@ startup is now 3.2 s to MODEL READY and independent of network state,
 which the privacy posture arguably required all along: everything except
 the LLM request should work with the network unplugged.
 
+## Observation 014
+Batch 3 gate: real-speech STT measured 1135 ms and the user's verdict was
+"okay, but a little slow" — with the sharp follow-up question of how
+ChatGPT voice feels *live*. The answer matters for the roadmap: the
+liveness gap is architectural, not a model-speed problem. Production
+voice systems (a) stream transcription during speech so STT latency is
+perceptually zero at turn end, (b) in the best case skip the
+STT→LLM→TTS pipeline entirely for native speech-to-speech (~300–600 ms,
+under the human turn-taking threshold), and (c) start speaking replies
+mid-generation. Our batch pipeline makes every millisecond visible.
+
+Decision: no streaming work in v0.1 — the privacy result is identical at
+1.1 s or 0 ms. But the post-v0.1 open-mic phase (Observation 010) is now
+specified more precisely: VAD endpointing + chunked streaming STT during
+speech + streamed TTS, reusing the same local models. "Feels live" is a
+latency-architecture property, and it layers on top of this pipeline
+rather than replacing it.
+
 ---
 
 # Future Work — declined rabbit-holes
