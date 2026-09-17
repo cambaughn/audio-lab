@@ -63,6 +63,7 @@ class ControlPanel(QWidget):
     manage_requested = Signal()
     end_session_requested = Signal()
     debug_toggled = Signal(bool)
+    use_fake_llm_toggled = Signal(bool)
     recognition_threshold_changed = Signal(float)
     private_threshold_changed = Signal(float)
     margin_changed = Signal(float)
@@ -185,6 +186,10 @@ class ControlPanel(QWidget):
         llm.setSpacing(theme.SPACING - 4)
         self.llm_label = QLabel("LLM  FAKE (LOCAL)")
         llm.addWidget(self.llm_label)
+        self.fake_llm_check = QCheckBox("USE FAKE LLM (NO NETWORK)")
+        self.fake_llm_check.setChecked(True)
+        self.fake_llm_check.toggled.connect(self.use_fake_llm_toggled)
+        llm.addWidget(self.fake_llm_check)
         root.addWidget(llm_box)
 
         # -- IDENTITY --

@@ -196,6 +196,9 @@ class MainWindow(QMainWindow):
         self.panel.debug_toggled.connect(self._on_debug_toggled)
         self.panel.debug_check.setChecked(self._settings.debug_mode)
         self.panel.set_debug_visible(self._settings.debug_mode)
+        self.panel.use_fake_llm_toggled.connect(self._on_use_fake_toggled)
+        if not self._settings.use_fake_llm:
+            self.panel.fake_llm_check.setChecked(False)  # triggers real activation
         self.panel.recognition_threshold_changed.connect(self._on_recognition_threshold)
         self.panel.private_threshold_changed.connect(self._on_private_threshold)
         self.panel.margin_changed.connect(self._on_margin)
@@ -517,6 +520,46 @@ class MainWindow(QMainWindow):
     def _end_guest_session(self) -> None:
         count = self.ephemerals.clear_all()
         self.log_event(f"GUEST SESSION ENDED — {count} EPHEMERAL SESSION(S) CLEARED")
+
+    # -- FAKE/REAL adapter toggle --
+
+    def _on_use_fake_toggled(self, use_fake: bool) -> None:
+        if use_fake:
+            self._activate_fake_adapter()
+        elif not self._activate_real_adapter():
+            self.panel.fake_llm_check.blockSignals(True)
+            self.panel.fake_llm_check.setChecked(True)
+            self.panel.fake_llm_check.blockSignals(False)
+            self._activate_fake_adapter()  # stay on fake; label reflects it
+            use_fake = True
+        self._settings.use_fake_llm = use_fake
+        self._save_settings()
+
+    def _activate_fake_adapter(self) -> None:
+        self.llm_recorder = RecordingAdapter(FakeLlmAdapter())
+        self._llm_model = FakeLlmAdapter.MODEL
+        self.llm_worker.set_adapter(self.llm_recorder)
+        self.panel.show_llm_state("LLM  FAKE (LOCAL)")
+        self.log_event("LLM ADAPTER: FAKE (LOCAL)")
+
+    def _activate_real_adapter(self) -> bool:
+        from audio_lab.llm.adapter import LlmConfigError
+        from audio_lab.llm.anthropic_adapter import AnthropicAdapter
+        from audio_lab.llm.config import load_llm_config
+
+        try:
+            llm_config = load_llm_config()
+            adapter = AnthropicAdapter(llm_config)
+        except LlmConfigError as exc:
+            self.panel.show_llm_state("LLM  NOT CONFIGURED", is_error=True)
+            self.log_event(f"LLM NOT CONFIGURED: {exc}")
+            return False
+        self.llm_recorder = RecordingAdapter(adapter)
+        self._llm_model = llm_config.model
+        self.llm_worker.set_adapter(self.llm_recorder)
+        self.panel.show_llm_state(f"LLM  {llm_config.model.upper()}")
+        self.log_event(f"LLM ADAPTER: ANTHROPIC ({llm_config.model})")
+        return True
 
     def _open_enroll(self) -> None:
         if self.store is None or self._enrollment_active():
