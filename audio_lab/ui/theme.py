@@ -151,6 +151,26 @@ def stylesheet() -> str:
     QLabel#error {{
         color: {ERROR};
     }}
+    QScrollArea {{
+        border: none;
+        background-color: {BG};
+    }}
+    QScrollBar:vertical {{
+        background: {BG};
+        width: 8px;
+        margin: 0;
+    }}
+    QScrollBar::handle:vertical {{
+        background: {AMBER_FAINT};
+        border-radius: {RADIUS}px;
+        min-height: 24px;
+    }}
+    QScrollBar::handle:vertical:hover {{
+        background: {AMBER_DIM};
+    }}
+    QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
+        height: 0;
+    }}
     QToolTip {{
         background-color: {BG_PANEL};
         color: {AMBER};

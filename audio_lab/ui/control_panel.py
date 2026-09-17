@@ -215,7 +215,7 @@ class ControlPanel(QWidget):
         debug.addWidget(self.debug_check)
         self.debug_view = QPlainTextEdit()
         self.debug_view.setReadOnly(True)
-        self.debug_view.setFixedHeight(140)
+        self.debug_view.setFixedHeight(120)
         self.debug_view.setVisible(False)
         self.debug_view.setPlaceholderText("LAST OUTBOUND LLM REQUEST")
         debug.addWidget(self.debug_view)
@@ -227,7 +227,7 @@ class ControlPanel(QWidget):
         self.log_view = QPlainTextEdit()
         self.log_view.setReadOnly(True)
         self.log_view.setMaximumBlockCount(200)
-        self.log_view.setFixedHeight(180)
+        self.log_view.setFixedHeight(120)
         log_layout.addWidget(self.log_view)
         root.addWidget(log_box)
 

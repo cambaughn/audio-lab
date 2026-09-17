@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QMainWindow,
     QPushButton,
+    QScrollArea,
     QVBoxLayout,
     QWidget,
 )
@@ -186,6 +187,12 @@ class MainWindow(QMainWindow):
             private_access_threshold=self._settings.private_access_threshold,
             match_margin=self._settings.match_margin,
         )
+        # the panel outgrew small screens — scroll it rather than the window
+        panel_scroll = QScrollArea()
+        panel_scroll.setWidget(self.panel)
+        panel_scroll.setWidgetResizable(True)
+        panel_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        panel_scroll.setFixedWidth(self.panel.width() + 14)
         self.panel.arm_requested.connect(self._arm)
         self.panel.stop_requested.connect(self._disarm)
         self.panel.device_selected.connect(self._on_device_selected)
@@ -202,7 +209,7 @@ class MainWindow(QMainWindow):
         self.panel.recognition_threshold_changed.connect(self._on_recognition_threshold)
         self.panel.private_threshold_changed.connect(self._on_private_threshold)
         self.panel.margin_changed.connect(self._on_margin)
-        columns.addWidget(self.panel)
+        columns.addWidget(panel_scroll)
 
         outer.addLayout(columns, stretch=1)
 
@@ -648,8 +655,19 @@ class MainWindow(QMainWindow):
         blob = self._settings.window_geometry
         if blob:
             self.restoreGeometry(QByteArray.fromBase64(blob.encode()))
-        else:
-            self.resize(860, 520)
+        available = self.screen().availableGeometry() if self.screen() else None
+        if available is None:
+            self.resize(880, 560)
+            return
+        if not blob:
+            self.resize(min(920, available.width() - 40), min(640, available.height() - 60))
+        # never open taller/wider than the screen (restored or default)
+        if self.height() > available.height() or self.width() > available.width():
+            self.resize(
+                min(self.width(), available.width() - 20),
+                min(self.height(), available.height() - 40),
+            )
+            self.move(available.x() + 10, available.y() + 10)
 
     def _save_settings(self, include_geometry: bool = False) -> None:
         if include_geometry:
