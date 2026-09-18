@@ -33,13 +33,21 @@ class AnthropicAdapter:
         import anthropic
 
         try:
-            response = self._client.messages.create(
+            # Refusal fallbacks (learnings Observation 017): claude-opus-5's
+            # safety classifiers occasionally decline benign turns (e.g.
+            # "give me my phone code" reads as credential retrieval). The
+            # server-side fallback re-runs a declined request on the
+            # recommended fallback model within the same call — same bytes,
+            # same provider, nothing extra leaves the machine.
+            response = self._client.beta.messages.create(
                 model=request.model,
                 max_tokens=request.max_tokens,
                 system=request.system_prompt,
                 messages=[
                     {"role": m.role, "content": m.content} for m in request.messages
                 ],
+                betas=["server-side-fallback-2026-07-01"],
+                extra_body={"fallbacks": "default"},
             )
         except anthropic.APIConnectionError as exc:
             raise LlmNetworkError(f"cannot reach Anthropic: {exc}") from exc
@@ -48,6 +56,16 @@ class AnthropicAdapter:
                 f"Anthropic error {exc.status_code}: {exc.message}"
             ) from exc
 
+        if response.stop_reason == "refusal":
+            # the whole fallback chain declined — surface it plainly
+            return LlmResponse(
+                text=(
+                    "(THE MODEL'S SAFETY SYSTEM DECLINED THIS TURN — "
+                    "TRY REPHRASING)"
+                ),
+                model=response.model,
+                stop_reason="refusal",
+            )
         text = "".join(
             block.text for block in response.content if block.type == "text"
         ).strip()

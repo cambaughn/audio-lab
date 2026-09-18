@@ -281,6 +281,28 @@ allowance (private = min_genuine − 0.15, floored at recognition + 0.10 →
 theme confirmed twice in one session: tell the model what its harness
 does, or it will invent something worse.
 
+## Observation 017
+The retest confirmed all three CP11.3 fixes in one transcript — the
+assistant coached the user into the 'remember' trigger and the save
+landed; the 0.44 threshold verified every genuine turn (0.49–0.65) while
+guests stayed UNKNOWN; the model narrated its harness truthfully ("I
+don't have Cameron's phone code" — backed by real absence). The new
+failure mode came from outside our system entirely: claude-opus-5's
+safety classifiers declined "give me my phone code" twice
+(stop_reason=refusal, credential-retrieval pattern) and allowed a third
+phrasing. The provider's own guardrails are an environmental factor in a
+personal-assistant experiment — a privacy layer that works can still be
+masked by an upstream safety layer that misfires on the vocabulary of
+private facts (codes, passwords).
+
+Decision: adopted the API's server-side refusal fallbacks
+(fallbacks="default" — a declined turn re-runs on the recommended
+fallback model inside the same call; identical bytes, same provider), and
+a whole-chain refusal now surfaces as a plain spoken-style message
+instead of raw stop_reason. A pleasing symmetry in the transcript: the
+model also caught a real STT discrepancy (1-1-1-1-7-7 vs 1177) and
+suggested re-saving — the LLM auditing the pipeline for free.
+
 ---
 
 # Future Work — declined rabbit-holes

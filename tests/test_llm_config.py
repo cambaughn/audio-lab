@@ -91,9 +91,15 @@ class _FakeMessages:
         return R()
 
 
+class _Beta:
+    def __init__(self, outcome):
+        self.messages = _FakeMessages(outcome)
+
+
 class _FakeClient:
     def __init__(self, outcome=None):
-        self.messages = _FakeMessages(outcome)
+        self.beta = _Beta(outcome)
+        self.messages = self.beta.messages  # adapter uses the beta path
 
 
 def make_adapter(outcome=None, monkeypatch=None):
@@ -130,6 +136,8 @@ class TestAnthropicAdapter:
         adapter, client = make_adapter()
         response = adapter.complete(request())
         call = client.messages.calls[0]
+        assert call.pop("betas") == ["server-side-fallback-2026-07-01"]
+        assert call.pop("extra_body") == {"fallbacks": "default"}  # constants
         assert call == {
             "model": "claude-opus-5",
             "max_tokens": 300,
@@ -139,7 +147,7 @@ class TestAnthropicAdapter:
                 {"role": "assistant", "content": "a1"},
                 {"role": "user", "content": "u2"},
             ],
-        }  # nothing beyond the frozen request's fields
+        }  # nothing else beyond the frozen request's fields
         assert response.text == "hi there"
         assert response.input_tokens == 11 and response.output_tokens == 7
 
@@ -161,3 +169,21 @@ class TestAnthropicAdapter:
         adapter, _ = make_adapter(outcome=status_err)
         with pytest.raises(LlmResponseError):
             adapter.complete(request())
+
+
+    def test_refusal_surfaces_plainly(self):
+        class _RefusalMessages(_FakeMessages):
+            def create(self, **kwargs):
+                class R:
+                    content = []
+                    model = "claude-opus-5"
+                    stop_reason = "refusal"
+                    usage = _Usage()
+                return R()
+
+        adapter, client = make_adapter()
+        client.beta.messages = _RefusalMessages(None)
+        client.messages = client.beta.messages
+        response = adapter.complete(request())
+        assert response.stop_reason == "refusal"
+        assert "SAFETY" in response.text and "REPHRASING" in response.text
