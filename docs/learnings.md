@@ -15,6 +15,52 @@ Decision: what we did (or deliberately did not do) because of it.
 
 ---
 
+## The question, answered (v0.1 retro)
+
+> Can a computer safely understand who is speaking, maintain separate
+> conversational contexts for different people, and make interacting with
+> software feel more natural?
+
+**Yes — with one large caveat that turned out to be the whole point.**
+
+Two enrolled household voices separated trivially (genuine 0.57–0.73 vs
+impostor 0.02–0.11, Observation 012), and the context isolation held under
+real adversarial pressure, including the owner impersonating a stranger to
+attack his own vault (Observation 018). The private fact was never in an
+unauthorized request — verified by eye in the debug panel and by 200+
+canary assertions in the suite.
+
+**What surprised us:**
+
+- **The hard part was never the privacy boundary.** The deterministic
+  router was straightforward and correct on the first real test. Every
+  actual problem lived *around* it: a guessed audio threshold (004), an
+  invisible OS input-volume setting (007), a full-duplex audio bug (008),
+  and the LLM confidently misdescribing its own harness (015, 016). The
+  research question was answered early; the engineering was in the
+  periphery.
+- **A model in a harness invents its own capabilities unless told.** Twice
+  the LLM described the system wrongly ("I can't verify voices"; "I don't
+  keep memories") — plausible, confident, false. Stating the harness's
+  real behavior in the persona fixed it. A general finding for any
+  assistant built as a pipeline around a model.
+- **The provider's own safety layer is an environmental factor.**
+  claude-opus-5 refused benign "what's my code" turns as credential
+  retrieval (017) — a privacy layer that works can still be masked by an
+  upstream safety layer misfiring on the *vocabulary* of secrets.
+- **Structural beats instructional, and it's easier to reason about.**
+  "Don't put the secret in the request" is a property you can test in
+  bytes; "tell the model not to reveal the secret" is a hope you audit
+  forever. The former was also less code.
+
+**What we'd prioritize next:** open-mic continuous interaction (010) — the
+direction the user wanted from the start — now specified concretely (VAD
+endpointing + streaming STT, with the measured ~2 s reliable-ID floor from
+011 as a real constraint). Interaction design, not classifier accuracy, is
+where the remaining value is.
+
+---
+
 ## Observation 001
 The macOS-14 wheel cliff identified for torch during planning turned out to
 be a *pattern*, not a single package: `av` (faster-whisper's audio decoder)

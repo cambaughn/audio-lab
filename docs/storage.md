@@ -25,7 +25,7 @@ Embedding codec: little-endian `<f4`, no header, blob length exactly
 decode — ported verbatim from Identity Lab (`docs/storage.md` there
 documents the format in full).
 
-## conversations.db (planned, CP9)
+## conversations.db (schema v1, CP9)
 
 - `contexts(id, scope CHECK IN ('PRIVATE','SHARED'), speaker_id,
   created_at, CHECK(scope='PRIVATE' ⟺ speaker_id NOT NULL))`
@@ -34,9 +34,16 @@ documents the format in full).
   decision, similarity, created_at)`
 - `facts(id, context_id FK CASCADE, content, created_by_speaker_id,
   created_at)`
+- `schema_migrations(version, applied_at)`
 
 `speaker_id` in conversations.db is a soft cross-file reference to
-speakers.db (documented, not enforced across files).
+speakers.db (documented, not enforced across files). Only PRIVATE and
+SHARED contexts are stored; EPHEMERAL is in-memory only (below). A fact
+becomes SHARED exactly one way: `share_fact()`, invoked by the MAKE SHARED
+button — it copies one fact into the shared context and leaves the private
+original in place. Deleting a speaker drops their PRIVATE context
+(messages and facts cascade); facts they shared survive, since sharing was
+a deliberate act.
 
 ## EPHEMERAL — deliberately not in storage
 

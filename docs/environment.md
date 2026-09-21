@@ -60,6 +60,23 @@ moved off PortAudio onto QAudioSink/CoreAudio. Remaining optional check
 (TCC revoke → `MIC PERMISSION SUSPECTED`) validated in code and against
 real silent capture, not re-run manually.
 
+## v0.1 release verification (2026-09-20)
+
+- Test suite: **229 tests**, all passing, no microphone / models / network
+  required (constructor injection throughout); runs in ~2 s.
+- Latency budget on the M2 CPU: speaker embed 30–70 ms; STT
+  (distil-small.en, int8) ~1.1 s for a 3 s utterance; both models load
+  once at launch (ECAPA ~2 s warm, Whisper ~30 s warm — the dominant
+  startup cost). End-to-end press-release → spoken reply is dominated by
+  STT + LLM network round-trip, comfortably under the target for turn-
+  based use.
+- Repository privacy audit: full git history contains only source, tests,
+  and docs — no databases, audio, models, keys, or settings ever committed
+  (72 .py, 8 .md, 1 .txt, 1 .gitignore; largest blob ever 31 KB, a source
+  file).
+- Real-model gate results (two-person recognition + context isolation) are
+  recorded in learnings.md Observations 012–018.
+
 ## CP5 — speaker model measurements (2026-08-10)
 
 ECAPA-TDNN (`speechbrain/spkrec-ecapa-voxceleb`, CPU): first-ever load

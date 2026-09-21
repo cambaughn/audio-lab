@@ -25,10 +25,34 @@ sibling experiment that answered the same question for faces.
 
 ## Status
 
-Under construction — Batch 1 (foundation + push-to-talk audio capture).
-See [docs/experiment.md](docs/experiment.md) for the research brief and
-[docs/learnings.md](docs/learnings.md) for the running observations log,
-which is a primary deliverable of this project.
+**v0.1** — the full experiment runs end to end: deliberate voice
+enrollment, two-threshold recognition, attributed transcription,
+deterministic identity-aware context routing, a real cloud LLM behind a
+fake-adapter toggle, and spoken responses. See
+[docs/experiment.md](docs/experiment.md) for the research brief and
+[docs/learnings.md](docs/learnings.md) for the running observations log —
+a primary deliverable of this project.
+
+## What it does
+
+- **Deliberate voice enrollment**: six guided utterances per person,
+  quality-gated, reviewable, all-or-nothing save. No identity exists
+  without an explicit enrollment.
+- **Speaker recognition** with two thresholds — a conversational-
+  recognition threshold and a stricter private-access threshold —
+  auto-calibrated from your own voices. Uncertainty always demotes access;
+  a voiceprint is a routing signal, never a password.
+- **Attributed speech**: each push-to-talk turn becomes
+  `[CAMERON] <transcript>`, transcribed locally.
+- **Deterministic context isolation** (the point): the application selects
+  only the context the current speaker is authorized for *before* building
+  the model request. One person's private information is never present in
+  another's request — not withheld by instruction, structurally absent.
+  A debug panel shows the exact outbound request.
+- **Spoken replies** via macOS `say`, with the microphone locked while the
+  app speaks so it never hears itself.
+
+Everything except the single configured LLM text request runs locally.
 
 ## Requirements
 
