@@ -658,7 +658,8 @@ class MainWindow(QMainWindow):
     def _open_manage(self) -> None:
         if self.store is None:
             return
-        dialog = ManageDialog(self.store, parent=self)
+        self.say.stop()
+        dialog = ManageDialog(self.store, conversations=self.conversations, parent=self)
         dialog.exec()
         if dialog.changed:
             self._rebuild_gallery()
