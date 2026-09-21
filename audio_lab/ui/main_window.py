@@ -15,6 +15,7 @@ and analyses; the window ignores them.
 
 import subprocess
 import time
+from enum import Enum
 
 import numpy as np
 from PySide6.QtCore import QByteArray, Qt, QThread, QTimer
@@ -51,6 +52,7 @@ from audio_lab.identity.matcher import Matcher, build_gallery
 from audio_lab.identity.store import DEFAULT_DB_FILENAME, SCHEMA_VERSION, IdentityStore
 from audio_lab.speech.embedder import MODEL_ID
 from audio_lab.speech.worker import ModelState, SpeechWorker
+from audio_lab.tts.speaker import SayWorker
 from audio_lab.ui import theme
 from audio_lab.ui.control_panel import ControlPanel
 from audio_lab.ui.conversation_view import ConversationView
@@ -63,6 +65,19 @@ CONSENT_TEXT = (
     "INFORMED CONSENT OF EVERYONE RECORDED — VOICE DATA REMAINS ON THIS "
     "MACHINE — NOT AN AUTHENTICATION SYSTEM"
 )
+
+TTS_COOLDOWN_MS = 300  # absorbs room echo tail after speech ends
+
+
+class AppState(str, Enum):
+    """One turn at a time: PTT is possible only in READY. The recorder is
+    force-disabled in every other state, so the app can never transcribe
+    its own speech (belt-and-braces guard in _on_clip_ready)."""
+
+    READY = "READY"
+    PROCESSING = "PROCESSING"
+    THINKING = "THINKING"
+    SPEAKING = "SPEAKING"
 
 
 class MainWindow(QMainWindow):
@@ -112,6 +127,12 @@ class MainWindow(QMainWindow):
         self._llm_model = FakeLlmAdapter.MODEL
         self._pending_turn = None  # (decision, transcript) awaiting LLM reply
 
+        self.say = SayWorker(self)
+        self.say.speaking_started.connect(self._on_speaking_started)
+        self.say.speaking_finished.connect(self._on_speaking_finished)
+        self.say.error.connect(self.log_event)
+        self._app_state = AppState.READY
+
         self._recording_started: float | None = None
         self._duration_timer = QTimer(self)
         self._duration_timer.setInterval(100)
@@ -133,6 +154,10 @@ class MainWindow(QMainWindow):
         self._rebuild_gallery()
         self._start_speech_worker(speech_worker)
         self._start_llm_worker()
+        # restore a persisted REAL adapter only now that llm_worker exists;
+        # setChecked triggers _on_use_fake_toggled, which needs the worker
+        if not self._settings.use_fake_llm:
+            self.panel.fake_llm_check.setChecked(False)
 
     def _start_llm_worker(self) -> None:
         self.llm_worker = LlmWorker(self.llm_recorder)
@@ -200,12 +225,13 @@ class MainWindow(QMainWindow):
         self.panel.enroll_requested.connect(self._open_enroll)
         self.panel.manage_requested.connect(self._open_manage)
         self.panel.end_session_requested.connect(self._end_guest_session)
+        self.panel.stop_speaking_requested.connect(self.say.stop)
         self.panel.debug_toggled.connect(self._on_debug_toggled)
         self.panel.debug_check.setChecked(self._settings.debug_mode)
         self.panel.set_debug_visible(self._settings.debug_mode)
         self.panel.use_fake_llm_toggled.connect(self._on_use_fake_toggled)
-        if not self._settings.use_fake_llm:
-            self.panel.fake_llm_check.setChecked(False)  # triggers real activation
+        # NOTE: the persisted-real-adapter restore happens after the LLM
+        # worker exists — see __init__ — not here, mid-layout.
         self.panel.recognition_threshold_changed.connect(self._on_recognition_threshold)
         self.panel.private_threshold_changed.connect(self._on_private_threshold)
         self.panel.margin_changed.connect(self._on_margin)
@@ -305,11 +331,15 @@ class MainWindow(QMainWindow):
     def _on_clip_ready(self, clip: AudioClip) -> None:
         if self._enrollment_active():
             return  # the enrollment dialog owns clips while it is open
+        if self._app_state in (AppState.THINKING, AppState.SPEAKING):
+            self.log_event("CLIP DISCARDED — TTS/LLM ACTIVE")
+            return
         self._last_clip = clip
         summary = f"{clip.duration_s:.1f}s  {clip.rms_dbfs:.0f} dBFS"
         self.panel.show_last_clip(summary, playable=True)
         self.log_event(f"CLIP CAPTURED: {summary}")
         if self._model_ready:
+            self._set_app_state(AppState.PROCESSING)
             self.speech_worker.submit(clip)
 
     def _on_clip_rejected(self, reason: str) -> None:
@@ -460,11 +490,14 @@ class MainWindow(QMainWindow):
         )
         if analysis.transcript:
             self._process_turn(decision, analysis.transcript, ephemeral)
+        elif self._app_state is AppState.PROCESSING:
+            self._set_app_state(AppState.READY)
 
     # -- the conversational turn: router -> LLM -> response --
 
     def _process_turn(self, decision, transcript: str, ephemeral: bool) -> None:
         if self.router is None:
+            self._set_app_state(AppState.READY)
             return
         assistant_tag = "EPHEMERAL — NOT PERSISTED" if ephemeral else None
 
@@ -479,32 +512,33 @@ class MainWindow(QMainWindow):
                 self.log_event("FACT NOT SAVED — PRIVATE ACCESS NOT VERIFIED")
             self.router.record_exchange(decision, transcript, ack)
             self.conversation.add_turn("ASSISTANT", None, ack, assistant_tag)
+            self._speak(ack)
             return
 
         bundle = self.router.route(decision, transcript)
         request = build_request(bundle, transcript, model=self._llm_model)
         self._pending_turn = (decision, transcript, bundle, assistant_tag)
-        self.panel.show_llm_state("LLM  THINKING…")
-        self.recorder.set_enabled(False)  # one turn at a time
+        self._set_app_state(AppState.THINKING)
         self.llm_worker.submit(request)
 
     def _on_llm_response(self, request, response) -> None:
         pending, self._pending_turn = self._pending_turn, None
-        self.recorder.set_enabled(True)
         self.panel.show_llm_state(f"LLM  {self._llm_model.upper()}")
         if pending is None:
+            self._set_app_state(AppState.READY)
             return
         decision, transcript, bundle, assistant_tag = pending
         self.router.record_exchange(decision, transcript, response.text)
         self.conversation.add_turn("ASSISTANT", None, response.text, assistant_tag)
         self.log_event(f"LLM REPLY ({len(response.text)} CHARS)")
         self._refresh_debug_panel(bundle)
+        self._speak(response.text)
 
     def _on_llm_error(self, message: str) -> None:
         self._pending_turn = None
-        self.recorder.set_enabled(True)
         self.panel.show_llm_state("LLM  ERROR", is_error=True)
         self.log_event(message)
+        self._set_app_state(AppState.READY)
 
     def _refresh_debug_panel(self, bundle=None) -> None:
         if not self._settings.debug_mode:
@@ -523,6 +557,33 @@ class MainWindow(QMainWindow):
         self.panel.set_debug_visible(enabled)
         self._save_settings()
         self._refresh_debug_panel()
+
+    def _set_app_state(self, state: AppState) -> None:
+        if state is self._app_state:
+            return
+        self._app_state = state
+        # the recorder may record only in READY — everything else locks PTT
+        self.recorder.set_enabled(state is AppState.READY)
+        speaking = state is AppState.SPEAKING
+        self.panel.show_tts_state("TTS  SPEAKING" if speaking else "TTS  IDLE", speaking)
+        if state is AppState.THINKING:
+            self.panel.show_llm_state("LLM  THINKING…")
+
+    def _speak(self, text: str) -> None:
+        self._set_app_state(AppState.SPEAKING)
+        self.say.speak(text)
+
+    def _on_speaking_started(self) -> None:
+        self.log_event("TTS: SPEAKING")
+
+    def _on_speaking_finished(self) -> None:
+        if self._app_state is AppState.SPEAKING:
+            # cooldown absorbs the echo tail before the mic re-arms
+            QTimer.singleShot(TTS_COOLDOWN_MS, self._end_cooldown)
+
+    def _end_cooldown(self) -> None:
+        if self._app_state is AppState.SPEAKING:
+            self._set_app_state(AppState.READY)
 
     def _end_guest_session(self) -> None:
         count = self.ephemerals.clear_all()
@@ -571,6 +632,8 @@ class MainWindow(QMainWindow):
     def _open_enroll(self) -> None:
         if self.store is None or self._enrollment_active():
             return
+        self.say.stop()
+        self._set_app_state(AppState.READY)
         self._enroll_dialog = EnrollDialog(
             self.recorder,
             self.speech_worker,
@@ -678,6 +741,7 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event) -> None:  # noqa: N802 (Qt override)
         self.player.stop()
+        self.say.stop()
         self.recorder.disarm()
         self.speech_worker.request_stop()
         self.llm_worker.request_stop()

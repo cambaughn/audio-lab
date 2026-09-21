@@ -62,6 +62,7 @@ class ControlPanel(QWidget):
     enroll_requested = Signal()
     manage_requested = Signal()
     end_session_requested = Signal()
+    stop_speaking_requested = Signal()
     debug_toggled = Signal(bool)
     use_fake_llm_toggled = Signal(bool)
     recognition_threshold_changed = Signal(float)
@@ -192,6 +193,18 @@ class ControlPanel(QWidget):
         llm.addWidget(self.fake_llm_check)
         root.addWidget(llm_box)
 
+        # -- SPEECH OUTPUT --
+        tts_box = QGroupBox("SPEECH OUTPUT")
+        tts = QVBoxLayout(tts_box)
+        tts.setSpacing(theme.SPACING - 4)
+        self.tts_label = QLabel("TTS  IDLE")
+        tts.addWidget(self.tts_label)
+        self.stop_speaking_button = QPushButton("STOP SPEAKING")
+        self.stop_speaking_button.setEnabled(False)
+        self.stop_speaking_button.clicked.connect(self.stop_speaking_requested)
+        tts.addWidget(self.stop_speaking_button)
+        root.addWidget(tts_box)
+
         # -- IDENTITY --
         id_box = QGroupBox("IDENTITY")
         id_layout = QVBoxLayout(id_box)
@@ -288,6 +301,10 @@ class ControlPanel(QWidget):
         self.llm_label.setObjectName("error" if is_error else "")
         self.llm_label.style().unpolish(self.llm_label)
         self.llm_label.style().polish(self.llm_label)
+
+    def show_tts_state(self, text: str, speaking: bool = False) -> None:
+        self.tts_label.setText(text)
+        self.stop_speaking_button.setEnabled(speaking)
 
     def set_debug_visible(self, visible: bool) -> None:
         self.debug_view.setVisible(visible)
