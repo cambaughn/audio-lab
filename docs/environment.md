@@ -107,8 +107,10 @@ is a non-issue at this stage. Model files live in the Hugging Face cache
   2026-09-16), built-in mic.
 - Calibration (leave-one-out genuine / cross-speaker impostor):
   genuine n=12 min 0.567 · median 0.662 · max 0.728; impostor n=12
-  min 0.020 · median 0.077 · max 0.107. Auto-applied thresholds:
-  **recognition 0.34, private 0.52**.
+  min 0.020 · median 0.077 · max 0.107. Auto-applied thresholds at this
+  point: **recognition 0.34, private 0.52** (private later lowered to
+  **0.44** by the live-variance calibration change — Observation 016 —
+  which is the shipped v0.1 operating value).
 - Live attribution: both speakers correctly named (Cameron 0.63–0.66 on
   sentence-length utterances; duration probe in Observation 011 — ~1 s
   clips score ~0.1 lower, curve saturates by ~3 s).

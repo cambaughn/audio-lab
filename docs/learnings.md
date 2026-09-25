@@ -23,12 +23,23 @@ Decision: what we did (or deliberately did not do) because of it.
 
 **Yes — with one large caveat that turned out to be the whole point.**
 
-Two enrolled household voices separated trivially (genuine 0.57–0.73 vs
-impostor 0.02–0.11, Observation 012), and the context isolation held under
-real adversarial pressure, including the owner impersonating a stranger to
-attack his own vault (Observation 018). The private fact was never in an
-unauthorized request — verified by eye in the debug panel and by 200+
-canary assertions in the suite.
+Two enrolled household voices separated trivially (genuine 0.567–0.728 vs
+impostor 0.020–0.107, Observation 012), and the context isolation held
+under real adversarial pressure, including the owner impersonating a
+stranger to attack his own vault while verbally claiming to be himself
+(Observation 018). The private fact was never in an unauthorized request —
+verified by eye in the debug panel and by 200+ canary assertions in the
+suite.
+
+**Manual-validation scope (precise).** Cameron manually demonstrated
+private save/recall through the real LLM, and manually demonstrated an
+UNKNOWN/disguised voice (0.12 / 0.25) being denied his private context
+even while claiming to be Cameron. Riley was enrolled and the
+calibration data shows strong separation. The *two-verified-speaker*
+cross-context LLM demo — Riley verified as herself, asking for
+Cameron's fact, debug panel confirming its absence from her request — was
+**not** manually run in v0.1; that isolation is proven only (but
+exhaustively) by the automated canary matrix.
 
 **What surprised us:**
 
@@ -371,37 +382,87 @@ item is unchanged: Riley's cross-speaker turns.
 
 ---
 
-# Future Work — declined rabbit-holes
+# Future Work — deliberately not pursued
 
-Each entry is something we chose **not** to build for v0.1, with one line
-on why it doesn't change what we learn.
+Each entry is a direction we found genuinely interesting and chose **not**
+to build for v0.1, with why it was safe to defer. The research question —
+does deterministic identity-aware context isolation work — was answerable
+without any of them. They are recorded here so the decision to skip them is
+explicit, not accidental.
 
-- **Open-mic continuous listening** — the roadmap headline for after
-  v0.1 (Observation 010): VAD utterance segmentation + continuous
-  attribution replacing the PTT front-end. Deferred, not declined.
-- **VAD / SNR estimation / noise reduction for PTT** — push-to-talk
-  already gives deliberate utterance boundaries; duration/level/clipping
-  gates are enough to answer the v0.1 question.
-- **Streaming / partial STT** — turn latency is measured and reported;
-  streaming changes feel, not findings, at this stage.
-- **Latency micro-optimization** beyond the <8 s end-to-end target —
-  the question is isolation and identity, not speed.
+## Interaction — making it feel natural (the biggest lane)
+
+- **Open-mic continuous listening** — the headline next step
+  (Observation 010): voice-activity endpointing + continuous attribution
+  replacing the push-to-talk front-end, so the system simply knows who is
+  present and speaking. The capture layer was kept swappable for exactly
+  this; the measured ~2 s reliable-ID floor (Observation 011) is a hard
+  constraint it will inherit.
+- **Streaming / partial transcription** — transcribing *during* speech so
+  perceived STT latency at turn end is ~0 (Observation 014). Our batch
+  pipeline makes every one of the ~1.1 s visible; streaming is the fix, and
+  it changes *feel*, not *findings*.
+- **Native speech-to-speech / audio interaction** — v0.1 speaks replies
+  with macOS `say` over a text pipeline. The lowest-latency, most natural
+  systems skip STT→LLM→TTS entirely for an audio-in/audio-out model
+  (~300–600 ms voice-to-voice, interruptible). A different architecture, a
+  separate experiment; deferred with open-mic.
+- **VAD / SNR estimation / noise reduction for PTT** — push-to-talk already
+  gives deliberate utterance boundaries; the duration/level/clipping gates
+  were enough. Only relevant once capture goes open-mic.
+- **Latency micro-optimization** beyond turn-based comfort — the question
+  is isolation and identity, not speed.
+
+## Identity — beyond two cooperating household voices
+
+- **Anti-spoofing / liveness detection** — replay and voice-clone
+  countermeasures. Out of scope *by framing*: v0.1 states plainly that a
+  voiceprint gates convenience, not authority (threat-model.md), so
+  spoof-resistance is not load-bearing. It becomes essential the moment
+  voice gates anything consequential (see below).
+- **Multimodal face + voice identity** — the naming is already
+  modality-neutral (`IdentityEvidence`, `RecognitionDecision`) so a future
+  fusion experiment isn't blocked; nothing multimodal is built.
 - **Speaker-verification accuracy work** (score normalization, PLDA,
-  fine-tuning) beyond threshold calibration — two-household-voice
-  separation either works with a stock model or that is itself the
-  finding.
-- **Anti-spoofing / liveness** — out of scope by framing: voiceprints are
-  not authentication here (see threat-model.md).
+  per-speaker thresholds, fine-tuning) — two-voice separation was so clean
+  (0.46-wide gap, Observation 012) that none was warranted. Would matter
+  for many speakers or hostile conditions.
 - **Session-level identity stickiness** — per-utterance decisions are
-  simpler and make failure behavior visible; stickiness is interaction
-  polish.
-- **Retroactive merge of RECOGNIZED turns into private history** —
-  a real design question, deferred until we observe whether it matters.
-- **Voice command for sharing facts** — sharing crosses a privacy
-  boundary; a deliberate UI click answers the question safely.
-- **NL intent parsing for "remember"** — a literal prefix is deterministic
-  and testable.
-- **Multimodal (face+voice) identity** — naming keeps the door open
-  (IdentityEvidence, RecognitionDecision); nothing is built.
-- **Whisper model upgrades** — only if `distil-small.en` demonstrably
-  fails a gate.
+  simpler and make failure behavior visible; smoothing is interaction
+  polish, not a finding.
+
+## Context and capability — what a verified speaker can do
+
+- **Richer context management** — v0.1 loads a flat last-20-message window
+  plus a fact list. Summarization, semantic retrieval over long private
+  histories, fact expiry/editing by voice, and cross-session threading are
+  all real product questions left untouched.
+- **Identity-aware tools / capabilities** — v0.1 only reads and writes
+  private text. The same authorization tier could gate *actions* (send a
+  message, control a device, spend money) — but each action-type is its own
+  privacy-and-consequence design problem, deliberately not opened here.
+- **Stronger authentication for consequential actions** — this is the
+  crucial pairing with the two above. The instant voice identity gates
+  anything with real consequences, a voiceprint is no longer sufficient
+  (replay/cloning). Such actions must sit behind a genuine second factor;
+  v0.1's contribution is proving the *routing* substrate, explicitly not
+  the authentication one.
+- **Retroactive merge of RECOGNIZED turns into private history** — when a
+  speaker later verifies, should their earlier under-verified turns fold
+  into their private context? A real design question, deferred until we
+  observe whether it matters in use.
+- **Voice command for sharing facts** — sharing crosses a privacy boundary,
+  so v0.1 makes it a deliberate UI click; a spoken "share this" is a
+  reasonable future affordance with its own confirmation design.
+- **NL intent parsing for "remember" and other commands** — v0.1 uses a
+  deterministic leading-word trigger precisely because the write path is
+  privacy-critical and must be testable. Natural-language command parsing
+  is a usability improvement to layer on carefully.
+
+## Housekeeping
+
+- **Whisper model upgrades** — only if `distil-small.en` demonstrably fails
+  a gate; accuracy was excellent in practice.
+- **macOS 14 upgrade** — would unlock current `torch`/`av` and MLX-based
+  models (mlx-whisper, native audio), all wheel-blocked on macOS 13 today
+  (Observations 001, 013).
