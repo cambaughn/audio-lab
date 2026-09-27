@@ -44,6 +44,9 @@ settings.json
 .env
 *.local
 
+# Developer demo-mode screenshot output (dev tooling, not a deliverable)
+demo-out/
+
 # macOS
 .DS_Store
 

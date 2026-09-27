@@ -86,9 +86,15 @@ class MainWindow(QMainWindow):
         recorder: AudioRecorder | None = None,
         speech_worker: SpeechWorker | None = None,
         store: IdentityStore | None = None,
+        demo_mode: bool = False,
     ) -> None:
         super().__init__()
         self.setWindowTitle("AUDIO LAB")
+        # demo_mode is developer-only screenshot tooling (see audio_lab/demo.py):
+        # it renders the real widgets but opens NO real subsystem — no mic,
+        # models, network, or databases — and persists nothing. Every gate it
+        # touches below only *skips* real startup; it never changes behavior.
+        self._demo_mode = demo_mode
         self._settings = config.load_settings()
         self._status_log = StatusLog()
         self._last_clip: AudioClip | None = None
@@ -101,7 +107,9 @@ class MainWindow(QMainWindow):
         self.player = ClipPlayer(self)
 
         self._store_error: str | None = None
-        if store is not None:
+        if demo_mode:
+            self.store = None
+        elif store is not None:
             self.store = store
         else:
             try:
@@ -112,11 +120,16 @@ class MainWindow(QMainWindow):
 
         # conversation layer: persistent store + in-memory ephemerals + router
         self._conversation_error: str | None = None
-        try:
-            self.conversations = ConversationStore(config.APP_DATA_DIR / CONVERSATIONS_DB)
-        except ConversationStoreError as exc:
+        if demo_mode:
             self.conversations = None
-            self._conversation_error = str(exc)
+        else:
+            try:
+                self.conversations = ConversationStore(
+                    config.APP_DATA_DIR / CONVERSATIONS_DB
+                )
+            except ConversationStoreError as exc:
+                self.conversations = None
+                self._conversation_error = str(exc)
         self.ephemerals = EphemeralRegistry()
         self.router = (
             ContextRouter(self.conversations, self.ephemerals)
@@ -150,6 +163,14 @@ class MainWindow(QMainWindow):
                 f"CONVERSATION STORE ERROR: {self._conversation_error} — "
                 "RUNNING WITHOUT CONTEXTS"
             )
+        if demo_mode:
+            # no devices, gallery, model thread, or network — demo.py drives
+            # the widgets directly with fixed fictional content
+            self.speech_worker = None
+            self.llm_worker = None
+            self._speech_thread = None
+            self._llm_thread = None
+            return
         self._refresh_devices()
         self._rebuild_gallery()
         self._start_speech_worker(speech_worker)
@@ -218,6 +239,7 @@ class MainWindow(QMainWindow):
         panel_scroll.setWidgetResizable(True)
         panel_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         panel_scroll.setFixedWidth(self.panel.width() + 14)
+        self._panel_scroll = panel_scroll  # demo mode scrolls this to frame DEBUG
         self.panel.arm_requested.connect(self._arm)
         self.panel.stop_requested.connect(self._disarm)
         self.panel.device_selected.connect(self._on_device_selected)
@@ -716,6 +738,14 @@ class MainWindow(QMainWindow):
         self.panel.append_log(StatusLog.format_event(event))
 
     def _restore_geometry(self) -> None:
+        if self._demo_mode:
+            # deterministic composition size, ignore any persisted geometry
+            available = self.screen().availableGeometry() if self.screen() else None
+            w, h = 1120, 820
+            if available is not None:
+                w, h = min(w, available.width() - 20), min(h, available.height() - 40)
+            self.resize(w, h)
+            return
         blob = self._settings.window_geometry
         if blob:
             self.restoreGeometry(QByteArray.fromBase64(blob.encode()))
@@ -744,15 +774,20 @@ class MainWindow(QMainWindow):
         self.player.stop()
         self.say.stop()
         self.recorder.disarm()
-        self.speech_worker.request_stop()
-        self.llm_worker.request_stop()
-        self._speech_thread.quit()
-        self._speech_thread.wait(5000)
-        self._llm_thread.quit()
-        self._llm_thread.wait(5000)
+        if self.speech_worker is not None:
+            self.speech_worker.request_stop()
+        if self.llm_worker is not None:
+            self.llm_worker.request_stop()
+        if self._speech_thread is not None:
+            self._speech_thread.quit()
+            self._speech_thread.wait(5000)
+        if self._llm_thread is not None:
+            self._llm_thread.quit()
+            self._llm_thread.wait(5000)
         if self.store is not None:
             self.store.close()
         if self.conversations is not None:
             self.conversations.close()
-        self._save_settings(include_geometry=True)
+        if not self._demo_mode:  # demo persists nothing
+            self._save_settings(include_geometry=True)
         super().closeEvent(event)
