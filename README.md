@@ -357,7 +357,7 @@ voiceprints).
 
 ## Models and licensing
 
-- **This repository:** private, non-commercial research code.
+- **This repository:** personal, non-commercial research code — no license granted.
 - **SpeechBrain + ECAPA-TDNN** speaker model: Apache-2.0.
 - **faster-whisper + `distil-small.en`** (Systran): MIT.
 - **PySide6:** LGPL-3.0. **sounddevice:** MIT. **PyTorch:** BSD-style.
