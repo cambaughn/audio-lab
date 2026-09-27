@@ -296,7 +296,7 @@ live-variance allowance, Observation 016, and the operating value became
 - warm startup to both models ready: **~3.2 s** (offline-first loading —
   see Observation 013)
 
-**Automated tests:** **229 passing**, no microphone / models / network
+**Automated tests:** **236 passing**, no microphone / models / network
 required (constructor injection throughout).
 
 ### What was and wasn't manually validated

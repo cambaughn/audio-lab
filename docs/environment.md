@@ -62,7 +62,7 @@ real silent capture, not re-run manually.
 
 ## v0.1 release verification (2026-09-20)
 
-- Test suite: **229 tests**, all passing, no microphone / models / network
+- Test suite: **236 tests**, all passing, no microphone / models / network
   required (constructor injection throughout); runs in ~2 s.
 - Latency budget on the M2 CPU: speaker embed 30–70 ms; STT
   (distil-small.en, int8) ~1.1 s for a 3 s utterance; both models load
