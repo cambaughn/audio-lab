@@ -16,8 +16,8 @@ The application foundation and amber-on-black console visual system were
 derived from [Identity Lab v0.1.0](https://github.com/cambaughn/identity-lab),
 the sibling experiment that asked the same question about faces.
 
-> ⚠️ **Experimental, non-commercial research software. Not an
-> authentication system.** A voiceprint is not a password: a recording or
+> ⚠️ **Experimental research software. Not an authentication system.** A
+> voiceprint is not a password: a recording or
 > a voice clone defeats it trivially. Use it only with the informed
 > consent of everyone whose voice is enrolled or recorded, and never for
 > access control or any consequential decision.
@@ -355,14 +355,21 @@ un-enrolled speakers, or the API key. Full deletion is available in the
 manage dialog (delete a speaker, delete all conversations, reset all
 voiceprints).
 
-## Models and licensing
+## License
 
-- **This repository:** personal, non-commercial research code — no license granted.
-- **SpeechBrain + ECAPA-TDNN** speaker model: Apache-2.0.
-- **faster-whisper + `distil-small.en`** (Systran): MIT.
-- **PySide6:** LGPL-3.0. **sounddevice:** MIT. **PyTorch:** BSD-style.
-- **anthropic** SDK: MIT (the cloud LLM call is the only non-local
-  component).
+Audio Lab's original source code is released under the **MIT License** (see
+[LICENSE](LICENSE)). You may use, copy, modify, redistribute, and incorporate
+it into other projects, including commercially.
+
+Third-party libraries, models, model weights, and datasets remain subject to
+their respective licenses. This repository's MIT license applies only to Audio
+Lab's original source code and does not relicense third-party components.
+
+The speaker model is
+[`speechbrain/spkrec-ecapa-voxceleb`](https://huggingface.co/speechbrain/spkrec-ecapa-voxceleb)
+(Apache-2.0), trained on VoxCeleb (CC BY 4.0); the speech-to-text model is
+[`Systran/faster-distil-whisper-small.en`](https://huggingface.co/Systran/faster-distil-whisper-small.en)
+(MIT). See the linked upstream projects and model cards for their terms.
 
 ---
 
