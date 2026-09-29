@@ -7,6 +7,13 @@ A local macOS research tool for a single question:
 > software feel more natural — without leaking one person's private
 > information into another person's request to the model?**
 
+![Audio Lab console: the enrolled owner saved a private "spaceship code," but an unidentified guest asking for it is recognized as UNKNOWN (0.12) and denied — the request is assembled without the private fact rather than merely withholding it.](docs/audio-lab-demo.png)
+
+*One shared assistant, two speakers. The enrolled owner's private fact was
+saved and recalled; an unidentified guest asking for it is scored `UNKNOWN
+(0.12)`, falls below threshold, and is denied — not by policy, but because
+the guest's request is built without that fact in the first place.*
+
 Audio Lab is a **research project, not a product**. It exists to answer
 that question and to record what we learned answering it — the running
 observations log in [docs/learnings.md](docs/learnings.md) is a primary

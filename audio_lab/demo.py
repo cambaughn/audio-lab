@@ -29,6 +29,7 @@ from audio_lab.conversation.router import ContextRouter, build_request
 from audio_lab.identity.decision import AccessTier, RecognitionDecision
 from audio_lab.ui import theme
 from audio_lab.ui.main_window import MainWindow
+from audio_lab.ui.waveform_widget import HISTORY_SECONDS, POINTS_PER_SECOND
 
 GUEST_QUESTION = "What's Cameron's spaceship code?"
 
@@ -61,15 +62,33 @@ DEFAULT_CAPTURE = Path(__file__).resolve().parent.parent / "demo-out" / "audio-l
 
 
 def _fixed_waveform() -> np.ndarray:
-    """A deterministic speech-like envelope — no randomness, reproducible."""
-    t = np.linspace(0.0, 1.0, 600, dtype=np.float32)
-    carrier = (
-        0.5 * np.sin(2 * np.pi * 3 * t)
-        + 0.3 * np.sin(2 * np.pi * 7 * t + 1.0)
-        + 0.2 * np.sin(2 * np.pi * 13 * t + 2.0)
-    )
-    syllables = 0.5 + 0.5 * np.sin(2 * np.pi * 2.5 * t)  # amplitude modulation
-    return (np.abs(carrier) * syllables * 0.8).astype(np.float32)
+    """A deterministic, realistic speech peak-trace for the screenshot.
+
+    The widget maps its full 6s buffer across the width and draws one
+    vertical line per point, so a real recording reads as a thin quiet
+    baseline with sparse, hairy syllable bursts — not a smooth sine blob.
+    We build that shape from fixed syllable envelopes times a fixed-seed
+    noise texture; the seed makes it reproducible run to run."""
+    n = HISTORY_SECONDS * POINTS_PER_SECOND
+    t = np.linspace(0.0, 1.0, n, dtype=np.float32)
+    rng = np.random.default_rng(7)  # fixed seed → deterministic
+
+    # syllable bursts as (center, width, height) — a few clustered words
+    # with quiet gaps between them, weighted toward the middle/right.
+    bursts = [
+        (0.08, 0.010, 0.45), (0.12, 0.009, 0.30),
+        (0.26, 0.012, 0.55), (0.30, 0.009, 0.38),
+        (0.44, 0.013, 0.72), (0.49, 0.010, 0.50), (0.53, 0.008, 0.34),
+        (0.66, 0.011, 0.62), (0.70, 0.009, 0.42),
+        (0.82, 0.014, 0.95), (0.86, 0.010, 0.66), (0.90, 0.008, 0.40),
+    ]
+    env = np.full(n, 0.03, dtype=np.float32)  # quiet noise floor
+    for center, width, height in bursts:
+        env = env + height * np.exp(-(((t - center) / width) ** 2)).astype(np.float32)
+
+    texture = np.abs(rng.standard_normal(n)).astype(np.float32)  # hairy detail
+    wave = env * (0.35 + 0.65 * texture)
+    return np.clip(wave, 0.0, 1.0).astype(np.float32)
 
 
 def _guest_debug_text() -> str:
@@ -135,22 +154,40 @@ def build_demo_window() -> MainWindow:
     return win
 
 
+# Screenshot frame: a ~4:3 composition. The control panel is taller than
+# this, so it scrolls — we frame the TOP of it (microphone + the recognition
+# result and access decision), which is what the shot is about. Rendering a
+# hidden window with grab() paints the widget tree at exactly this size,
+# regardless of the physical screen.
+SHOT_W, SHOT_H = 1040, 780
+
+
+def _save_full_screenshot(app: QApplication, capture_path: Path) -> None:
+    win = build_demo_window()
+    win.resize(SHOT_W, SHOT_H)
+    win.centralWidget().layout().activate()
+    win._panel_scroll.verticalScrollBar().setValue(0)  # frame the top
+    app.processEvents()
+
+    capture_path.parent.mkdir(parents=True, exist_ok=True)
+    win.grab().save(str(capture_path))
+    print(f"saved screenshot to {capture_path}")
+    win.deleteLater()
+    app.processEvents()
+
+
 def run_demo(capture_path: Path | None = None, auto_quit: bool = False) -> int:
     app = QApplication.instance() or QApplication(sys.argv)
     app.setStyleSheet(theme.stylesheet())
+
+    if capture_path is not None:
+        _save_full_screenshot(app, capture_path)
+        if auto_quit:
+            return 0
+
+    # live view for the developer (the panel scrolls on a laptop screen)
     win = build_demo_window()
     win.show()
-
-    def _compose_and_capture() -> None:
-        # scroll the right panel so DEBUG + EVENT LOG frame the shot
-        bar = win._panel_scroll.verticalScrollBar()
-        bar.setValue(bar.maximum())
-        if capture_path is not None:
-            capture_path.parent.mkdir(parents=True, exist_ok=True)
-            win.grab().save(str(capture_path))
-            print(f"saved screenshot to {capture_path}")
-        if auto_quit:
-            app.quit()
-
-    QTimer.singleShot(600, _compose_and_capture)
+    QTimer.singleShot(400, lambda: win._panel_scroll.verticalScrollBar().setValue(
+        win._panel_scroll.verticalScrollBar().maximum()))
     return app.exec()
